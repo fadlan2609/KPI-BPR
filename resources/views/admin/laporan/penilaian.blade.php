@@ -17,7 +17,7 @@
                    class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm">
                     <i class="fas fa-file-pdf mr-2"></i> PDF
                 </a>
-                <a href="{{ route('admin.laporan.download-penilaian', ['periode_id' => $periode->id, 'format' => 'excel']) }}" 
+                <a href="{{ route('admin.lapor0an.download-penilaian', ['periode_id' => $periode->id, 'format' => 'excel']) }}" 
                    class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm">
                     <i class="fas fa-file-excel mr-2"></i> Excel
                 </a>
