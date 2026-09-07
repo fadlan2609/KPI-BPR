@@ -15,6 +15,7 @@ use App\Models\IndikatorKPI;
 use App\Services\PenilaianService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\PenilaianExport;
@@ -130,7 +131,7 @@ class PenilaianController extends Controller
                 'label' => 'Memulai Self Assessment Kinerja oleh Pegawai',
                 'description' => "{$selfAssessmentCount} dari {$selfAssessmentTotal} pegawai telah mengisi self assessment",
                 'button_text' => 'Selesai Self Assessment',
-                'button_url' => route('login'),
+                'button_url' => route('admin.penilaian.index'),
             ],
             'laporan' => [
                 'completed' => $laporanCount > 0,
@@ -248,11 +249,51 @@ class PenilaianController extends Controller
     }
 
     /**
+     * Remove the specified penilaian from storage.
+     */
+    public function destroy($id)
+    {
+        try {
+            $periodeAktif = PeriodePenilaian::where('is_active', true)->first();
+            
+            if (!$periodeAktif) {
+                return redirect()->route('admin.penilaian.index')
+                    ->with('error', 'Tidak ada periode penilaian aktif!');
+            }
+
+            // Hapus penilaian KPI (termasuk yang final)
+            $deleted = PenilaianKPI::where('pegawai_id', $id)
+                ->where('periode_id', $periodeAktif->id)
+                ->delete();
+
+            // Hapus hasil penilaian (termasuk yang final)
+            HasilPenilaian::where('pegawai_id', $id)
+                ->where('periode_id', $periodeAktif->id)
+                ->delete();
+
+            if ($deleted) {
+                return redirect()->route('admin.penilaian.index')
+                    ->with('success', 'Data penilaian (termasuk final) berhasil dihapus!');
+            } else {
+                return redirect()->route('admin.penilaian.index')
+                    ->with('warning', 'Tidak ada data penilaian untuk pegawai ini.');
+            }
+            
+        } catch (\Exception $e) {
+            return redirect()->route('admin.penilaian.index')
+                ->with('error', 'Gagal menghapus penilaian: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Display cetak hasil penilaian
      */
     public function cetak(Request $request)
     {
         $periodeId = $request->periode;
+        
+        // Ambil semua periode untuk dropdown
+        $periodeList = PeriodePenilaian::orderBy('created_at', 'desc')->get();
         
         if (!$periodeId) {
             $periodeAktif = PeriodePenilaian::where('is_active', true)->first();
@@ -261,25 +302,33 @@ class PenilaianController extends Controller
             }
         }
 
-        $periodeList = PeriodePenilaian::orderBy('created_at', 'desc')->get();
         $periode = $periodeId ? PeriodePenilaian::find($periodeId) : null;
         
-        $data = [];
+        $data = collect();
+        $statistik = [
+            'total' => 0,
+            'sangat_baik' => 0,
+            'baik' => 0,
+            'cukup' => 0,
+            'kurang' => 0,
+            'rata_rata' => 0,
+        ];
+        
         if ($periode) {
             $data = HasilPenilaian::with(['pegawai', 'pegawai.jabatan', 'predikat'])
                 ->where('periode_id', $periodeId)
                 ->where('status', 'final')
                 ->get();
+                
+            $statistik = [
+                'total' => $data->count(),
+                'sangat_baik' => $data->where('predikat.nama', 'Sangat Baik')->count(),
+                'baik' => $data->where('predikat.nama', 'Baik')->count(),
+                'cukup' => $data->where('predikat.nama', 'Cukup')->count(),
+                'kurang' => $data->where('predikat.nama', 'Kurang')->count(),
+                'rata_rata' => $data->avg('nilai_akhir') ?? 0,
+            ];
         }
-
-        $statistik = [
-            'total' => $data->count(),
-            'sangat_baik' => $data->where('predikat.nama', 'Sangat Baik')->count(),
-            'baik' => $data->where('predikat.nama', 'Baik')->count(),
-            'cukup' => $data->where('predikat.nama', 'Cukup')->count(),
-            'kurang' => $data->where('predikat.nama', 'Kurang')->count(),
-            'rata_rata' => $data->avg('nilai_akhir') ?? 0,
-        ];
 
         return view('admin.penilaian.cetak', compact('periodeList', 'periode', 'data', 'statistik'));
     }
@@ -477,6 +526,90 @@ class PenilaianController extends Controller
         $pdf->setPaper('a4', 'portrait');
         
         return $pdf->download('Laporan_Penilaian_' . $pegawai->nama . '_' . str_replace(' ', '_', $periode->nama) . '.pdf');
+    }
+
+    /**
+     * Preview single (HTML)
+     */
+    public function preview($pegawaiId, $periodeId)
+    {
+        $pegawai = Pegawai::with([
+            'jabatan', 
+            'atasanLangsung',
+            'atasanLangsung.jabatan',
+            'atasanLangsung.jabatan.atasan'
+        ])->findOrFail($pegawaiId);
+        
+        $periode = PeriodePenilaian::findOrFail($periodeId);
+        
+        $hasil = HasilPenilaian::with(['predikat'])
+            ->where('pegawai_id', $pegawaiId)
+            ->where('periode_id', $periodeId)
+            ->where('status', 'final')
+            ->first();
+
+        if (!$hasil) {
+            return redirect()->route('admin.penilaian.cetak')
+                ->with('error', 'Penilaian untuk pegawai ini belum final!');
+        }
+
+        $bpr = BPR::first();
+        
+        $penilaian = PenilaianKPI::with(['penilai'])
+            ->where('pegawai_id', $pegawaiId)
+            ->where('periode_id', $periodeId)
+            ->get()
+            ->keyBy('level_penilai');
+
+        $atasanPenilai = null;
+        $atasanLangsung = null;
+        $hasAtasanPenilai = false;
+        
+        if ($pegawai->atasanLangsung) {
+            $atasanLangsung = $pegawai->atasanLangsung;
+            
+            if ($atasanLangsung->jabatan && $atasanLangsung->jabatan->atasan) {
+                $jabatanPenilai = $atasanLangsung->jabatan->atasan;
+                $atasanPenilai = Pegawai::where('jabatan_id', $jabatanPenilai->id)
+                    ->where('status', 'aktif')
+                    ->first();
+                if ($atasanPenilai) {
+                    $hasAtasanPenilai = true;
+                }
+            }
+        }
+
+        if (!$hasAtasanPenilai && isset($penilaian['atasan_penilai'])) {
+            $hasAtasanPenilai = true;
+            $atasanPenilai = $penilaian['atasan_penilai']->penilai;
+        }
+
+        return view('admin.penilaian.preview', compact(
+            'pegawai', 
+            'periode', 
+            'hasil', 
+            'bpr', 
+            'penilaian',
+            'atasanLangsung',
+            'atasanPenilai',
+            'hasAtasanPenilai'
+        ));
+    }
+
+    /**
+     * Preview all (HTML)
+     */
+    public function previewAll($periodeId)
+    {
+        $periode = PeriodePenilaian::findOrFail($periodeId);
+        $data = HasilPenilaian::with(['pegawai', 'pegawai.jabatan', 'predikat'])
+            ->where('periode_id', $periodeId)
+            ->where('status', 'final')
+            ->get();
+
+        $bpr = BPR::first();
+
+        return view('admin.penilaian.preview-all', compact('periode', 'data', 'bpr'));
     }
 
     /**

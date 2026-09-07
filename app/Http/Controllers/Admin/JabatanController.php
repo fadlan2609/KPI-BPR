@@ -11,19 +11,40 @@ use App\Exports\JabatanExport;
 
 class JabatanController extends Controller
 {
-    public function index()
+    /**
+     * Display a listing of the resource.
+     */
+    public function index(Request $request)
     {
-        $jabatan = Jabatan::with('atasan')->paginate(10);
+        $search = $request->search;
+        
+        $jabatan = Jabatan::with('atasan')
+            ->when($search, function ($query, $search) {
+                return $query->where(function ($q) use ($search) {
+                    $q->where('nama', 'LIKE', "%{$search}%")
+                      ->orWhere('keterangan', 'LIKE', "%{$search}%");
+                });
+            })
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
+        
         $jabatanOptions = Jabatan::all();
-        return view('admin.jabatan.index', compact('jabatan', 'jabatanOptions'));
+        
+        return view('admin.jabatan.index', compact('jabatan', 'jabatanOptions', 'search'));
     }
 
+    /**
+     * Show the form for creating a new resource.
+     */
     public function create()
     {
         $jabatanOptions = Jabatan::all();
         return view('admin.jabatan.create', compact('jabatanOptions'));
     }
 
+    /**
+     * Store a newly created resource in storage.
+     */
     public function store(Request $request)
     {
         $request->validate([
@@ -38,6 +59,18 @@ class JabatanController extends Controller
             ->with('success', 'Jabatan berhasil ditambahkan!');
     }
 
+    /**
+     * Display the specified resource.
+     */
+    public function show($id)
+    {
+        $jabatan = Jabatan::with(['atasan', 'bawahan', 'pegawai'])->findOrFail($id);
+        return view('admin.jabatan.show', compact('jabatan'));
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     */
     public function edit($id)
     {
         $jabatan = Jabatan::findOrFail($id);
@@ -45,6 +78,9 @@ class JabatanController extends Controller
         return view('admin.jabatan.edit', compact('jabatan', 'jabatanOptions'));
     }
 
+    /**
+     * Update the specified resource in storage.
+     */
     public function update(Request $request, $id)
     {
         $jabatan = Jabatan::findOrFail($id);
@@ -61,6 +97,9 @@ class JabatanController extends Controller
             ->with('success', 'Jabatan berhasil diperbarui!');
     }
 
+    /**
+     * Remove the specified resource from storage.
+     */
     public function destroy($id)
     {
         $jabatan = Jabatan::findOrFail($id);
@@ -83,6 +122,9 @@ class JabatanController extends Controller
             ->with('success', 'Jabatan berhasil dihapus!');
     }
 
+    /**
+     * Import jabatan from Excel
+     */
     public function import(Request $request)
     {
         $request->validate([
@@ -99,8 +141,46 @@ class JabatanController extends Controller
         }
     }
 
+    /**
+     * Download template Excel for import
+     */
     public function template()
     {
         return Excel::download(new JabatanExport, 'template_jabatan.xlsx');
+    }
+
+    /**
+     * Export jabatan to Excel
+     */
+    public function export()
+    {
+        $jabatan = Jabatan::with('atasan')->get();
+        return Excel::download(new JabatanExport($jabatan), 'data_jabatan.xlsx');
+    }
+
+    /**
+     * Get jabatan hierarchy (for AJAX)
+     */
+    public function hierarchy()
+    {
+        $jabatan = Jabatan::with(['atasan', 'bawahan'])->get();
+        return response()->json($jabatan);
+    }
+
+    /**
+     * Get jabatan list for dropdown (for AJAX)
+     */
+    public function apiList(Request $request)
+    {
+        $search = $request->search;
+        
+        $jabatan = Jabatan::when($search, function ($query, $search) {
+                return $query->where('nama', 'LIKE', "%{$search}%");
+            })
+            ->select('id', 'nama')
+            ->orderBy('nama')
+            ->get();
+        
+        return response()->json($jabatan);
     }
 }

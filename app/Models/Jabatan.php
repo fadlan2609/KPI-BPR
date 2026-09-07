@@ -52,4 +52,40 @@ class Jabatan extends Model
     {
         return $this->hasMany(BobotPenilaian::class);
     }
+
+    /**
+     * Cek apakah jabatan memiliki indikator
+     */
+    public function hasIndikator()
+    {
+        return $this->indikatorKPI()->count() > 0 || 
+               $this->indikatorKompetensi()->count() > 0 || 
+               $this->indikatorCoreValues()->count() > 0;
+    }
+
+    /**
+     * Get total indikator
+     */
+    public function getTotalIndikatorAttribute()
+    {
+        return $this->indikatorKPI()->count() + 
+               $this->indikatorKompetensi()->count() + 
+               $this->indikatorCoreValues()->count();
+    }
+
+    /**
+     * Get status indikator
+     */
+    public function getStatusIndikatorAttribute()
+    {
+        return $this->total_indikator > 0 ? 'lengkap' : 'kosong';
+    }
+
+    /**
+     * Get status indikator text
+     */
+    public function getStatusIndikatorTextAttribute()
+    {
+        return $this->status_indikator == 'lengkap' ? '✅ Ada Indikator' : '❌ Belum Ada';
+    }
 }

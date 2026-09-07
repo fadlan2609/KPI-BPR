@@ -18,16 +18,24 @@
     
     <!-- Filter & Search -->
     <div class="bg-white rounded-lg shadow p-4">
-        <div class="flex flex-wrap gap-4">
-            <input type="text" id="search" placeholder="Cari jabatan..." 
+        <form action="{{ route('admin.jabatan.index') }}" method="GET" class="flex flex-wrap gap-4">
+            <input type="text" name="search" placeholder="Cari jabatan..." 
+                   value="{{ request('search') }}"
                    class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1">
-            <button onclick="filterData()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md">
+            <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md">
                 <i class="fas fa-search mr-2"></i> Cari
             </button>
-            <button onclick="resetFilter()" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md">
+            <a href="{{ route('admin.jabatan.index') }}" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md">
                 <i class="fas fa-undo mr-2"></i> Reset
-            </button>
-        </div>
+            </a>
+        </form>
+        
+        @if(request('search'))
+            <div class="mt-2 text-sm text-gray-500">
+                <i class="fas fa-filter mr-1"></i>
+                Menampilkan hasil pencarian: <span class="font-medium">"{{ request('search') }}"</span>
+            </div>
+        @endif
     </div>
     
     <!-- Table -->
@@ -53,7 +61,6 @@
                         <a href="{{ route('admin.jabatan.edit', $j->id) }}" class="text-blue-600 hover:text-blue-900 mr-2">
                             <i class="fas fa-edit"></i>
                         </a>
-                        {{-- FORM DELETE dengan parameter --}}
                         <form action="{{ route('admin.jabatan.destroy', $j->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Yakin ingin menghapus jabatan ini?')">
                             @csrf
                             @method('DELETE')
@@ -65,7 +72,13 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Belum ada data jabatan</td>
+                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                        @if(request('search'))
+                            Tidak ada jabatan yang sesuai dengan pencarian "{{ request('search') }}"
+                        @else
+                            Belum ada data jabatan
+                        @endif
+                    </td>
                 </tr>
                 @endforelse
             </tbody>
@@ -168,16 +181,6 @@
     function closeModal(id) {
         document.getElementById(id).classList.add('hidden');
         document.getElementById(id).classList.remove('flex');
-    }
-    
-    function filterData() {
-        const search = document.getElementById('search').value;
-        window.location.href = '{{ route("admin.jabatan.index") }}?search=' + search;
-    }
-    
-    function resetFilter() {
-        document.getElementById('search').value = '';
-        window.location.href = '{{ route("admin.jabatan.index") }}';
     }
     
     // Close modal when clicking outside

@@ -33,6 +33,23 @@ class IndikatorController extends Controller
         
         $periodeAktif = PeriodePenilaian::where('is_active', true)->first();
         
+        // Hitung status indikator untuk setiap jabatan
+        foreach ($jabatan as $j) {
+            $totalIndikator = $j->indikator_kpi_count + $j->indikator_kompetensi_count + $j->indikator_core_values_count;
+            
+            if ($totalIndikator > 0) {
+                $j->status_indikator = 'lengkap';
+                $j->status_text = '✅ Ada Indikator';
+                $j->status_color = 'green';
+                $j->total_indikator = $totalIndikator;
+            } else {
+                $j->status_indikator = 'kosong';
+                $j->status_text = '❌ Belum Ada';
+                $j->status_color = 'red';
+                $j->total_indikator = 0;
+            }
+        }
+        
         return view('admin.indikator.index', compact('jabatan', 'periodeAktif'));
     }
 
@@ -354,5 +371,48 @@ class IndikatorController extends Controller
     public function templateMulti()
     {
         return Excel::download(new IndikatorMultiSheetTemplate, 'template_indikator_all.xlsx');
+    }
+
+    /**
+     * API: Get indikator by jabatan
+     */
+    public function apiByJabatan($jabatanId)
+    {
+        $kpi = IndikatorKPI::where('jabatan_id', $jabatanId)->get();
+        $kompetensi = IndikatorKompetensi::where('jabatan_id', $jabatanId)->get();
+        $coreValues = IndikatorCoreValue::where('jabatan_id', $jabatanId)->get();
+        
+        return response()->json([
+            'kpi' => $kpi,
+            'kompetensi' => $kompetensi,
+            'core_values' => $coreValues,
+        ]);
+    }
+
+    /**
+     * API: Get KPI by jabatan
+     */
+    public function apiKPI($jabatanId)
+    {
+        $data = IndikatorKPI::where('jabatan_id', $jabatanId)->get();
+        return response()->json($data);
+    }
+
+    /**
+     * API: Get Kompetensi by jabatan
+     */
+    public function apiKompetensi($jabatanId)
+    {
+        $data = IndikatorKompetensi::where('jabatan_id', $jabatanId)->get();
+        return response()->json($data);
+    }
+
+    /**
+     * API: Get Core Values by jabatan
+     */
+    public function apiCoreValues($jabatanId)
+    {
+        $data = IndikatorCoreValue::where('jabatan_id', $jabatanId)->get();
+        return response()->json($data);
     }
 }

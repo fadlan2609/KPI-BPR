@@ -38,7 +38,7 @@
 
     @if($periode)
         <!-- Tombol Download -->
-        <div class="flex justify-end space-x-2 mb-4">
+        <div class="flex justify-end space-x-2">
             <a href="{{ route('admin.penilaian.preview-all', $periode->id) }}" 
                class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm" target="_blank">
                 <i class="fas fa-eye mr-2"></i> Preview All PDF

@@ -111,22 +111,35 @@ Route::middleware(['auth', 'role:admin', 'user.active'])
         Route::delete('/indikator/{id}', [IndikatorController::class, 'destroy'])->name('indikator.destroy');
         
         // ==================== PENILAIAN KPI ====================
-        Route::get('/penilaian', [PenilaianController::class, 'index'])->name('penilaian.index');
-        Route::get('/penilaian/progress', [PenilaianController::class, 'progress'])->name('penilaian.progress');
-        Route::get('/penilaian/create/{pegawai}/{periode}', [PenilaianController::class, 'create'])->name('penilaian.create');
-        Route::post('/penilaian', [PenilaianController::class, 'store'])->name('penilaian.store');
-        Route::get('/penilaian/{penilaian}', [PenilaianController::class, 'show'])->name('penilaian.show');
-        Route::post('/penilaian/finalize/{periode}', [PenilaianController::class, 'finalize'])->name('penilaian.finalize');
-        
-        // ===== CETAK HASIL PENILAIAN =====
-        Route::get('/penilaian-cetak', [PenilaianController::class, 'cetak'])->name('penilaian.cetak');
-        Route::get('/penilaian-cetak-pdf/{periode}', [PenilaianController::class, 'cetakPDF'])->name('penilaian.cetak-pdf');
-        Route::get('/penilaian-cetak-excel/{periode}', [PenilaianController::class, 'cetakExcel'])->name('penilaian.cetak-excel');
-        Route::get('/penilaian-cetak-single/{pegawai}/{periode}', [PenilaianController::class, 'cetakSingle'])->name('penilaian.cetak-single');
-        
-        // ===== PREVIEW PDF =====
-        Route::get('/penilaian-preview/{pegawai}/{periode}', [PenilaianController::class, 'previewPDF'])->name('penilaian.preview');
-        Route::get('/penilaian-preview-all/{periode}', [PenilaianController::class, 'previewAllPDF'])->name('penilaian.preview-all');
+        Route::prefix('penilaian')->name('penilaian.')->group(function () {
+            
+            // Halaman utama
+            Route::get('/', [PenilaianController::class, 'index'])->name('index');
+            Route::get('/progress', [PenilaianController::class, 'progress'])->name('progress');
+            
+            // ===== CETAK HASIL PENILAIAN (HARUS DI ATAS WILDCARD) =====
+            Route::get('/cetak', [PenilaianController::class, 'cetak'])->name('cetak');
+            Route::get('/cetak-pdf/{periode}', [PenilaianController::class, 'cetakPDF'])->name('cetak-pdf');
+            Route::get('/cetak-excel/{periode}', [PenilaianController::class, 'cetakExcel'])->name('cetak-excel');
+            Route::get('/cetak-single/{pegawai}/{periode}', [PenilaianController::class, 'cetakSingle'])->name('cetak-single');
+            
+            // ===== PREVIEW (HARUS DI ATAS WILDCARD) =====
+            Route::get('/preview/{pegawai}/{periode}', [PenilaianController::class, 'preview'])->name('preview');
+            Route::get('/preview-all/{periode}', [PenilaianController::class, 'previewAll'])->name('preview-all');
+            Route::get('/preview-pdf/{pegawai}/{periode}', [PenilaianController::class, 'previewPDF'])->name('preview-pdf');
+            Route::get('/preview-all-pdf/{periode}', [PenilaianController::class, 'previewAllPDF'])->name('preview-all-pdf');
+            
+            // ===== FINALIZE =====
+            Route::post('/finalize/{periode}', [PenilaianController::class, 'finalize'])->name('finalize');
+            
+            // ===== CRUD (CREATE & STORE) =====
+            Route::get('/create/{pegawai}/{periode}', [PenilaianController::class, 'create'])->name('create');
+            Route::post('/', [PenilaianController::class, 'store'])->name('store');
+            
+            // ===== WILDCARD ROUTE (HARUS PALING BAWAH) =====
+            Route::get('/{penilaian}', [PenilaianController::class, 'show'])->name('show');
+            Route::delete('/{penilaian}', [PenilaianController::class, 'destroy'])->name('destroy');
+        });
         
         // ==================== GAJI ====================
         Route::prefix('gaji')->name('gaji.')->group(function () {
@@ -172,11 +185,22 @@ Route::middleware(['auth', 'role:admin', 'user.active'])
         // ==================== LAPORAN ====================
         Route::prefix('laporan')->name('laporan.')->group(function () {
             Route::get('/', [LaporanController::class, 'index'])->name('index');
+            
+            // Penilaian
             Route::get('/penilaian', [LaporanController::class, 'penilaian'])->name('penilaian');
             Route::get('/penilaian/download', [LaporanController::class, 'downloadPenilaian'])->name('download-penilaian');
+            
+            // Gaji
             Route::get('/gaji', [LaporanController::class, 'gaji'])->name('gaji');
+            Route::get('/gaji/download', [LaporanController::class, 'downloadGaji'])->name('download-gaji');
+            
+            // Bonus
             Route::get('/bonus', [LaporanController::class, 'bonus'])->name('bonus');
+            Route::get('/bonus/download', [LaporanController::class, 'downloadBonus'])->name('download-bonus');
+            
+            // Cuti
             Route::get('/cuti', [LaporanController::class, 'cuti'])->name('cuti');
+            Route::get('/cuti/download', [LaporanController::class, 'downloadCuti'])->name('download-cuti');
         });
     });
 
