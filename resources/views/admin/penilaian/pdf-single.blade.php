@@ -197,11 +197,17 @@
 
     <!-- ==================== HEADER ==================== -->
     <div class="header">
-        @if($bpr && $bpr->logo)
-            <img src="{{ public_path('storage/' . $bpr->logo) }}" alt="Logo" class="logo">
+        @php
+            use App\Helpers\AppHelper;
+            $logoBase64 = AppHelper::getLogoBase64();
+        @endphp
+        @if($logoBase64)
+            <img src="{{ $logoBase64 }}" alt="Logo" class="logo">
+        @else
+            <h1 style="font-size:14px; color:#1F4E79;">{{ AppHelper::getBprName() }}</h1>
         @endif
         <h1>LAPORAN PENILAIAN KINERJA</h1>
-        <p>{{ $bpr->nama_bpr ?? 'BPRS Amanah Bangsa' }}</p>
+        <p>{{ $bpr->nama_bpr ?? AppHelper::getBprName() }}</p>
         <div class="info">
             <span><strong>Periode:</strong> {{ $periode->nama }}</span>
             <span><strong>Pegawai:</strong> {{ $pegawai->nama }}</span>

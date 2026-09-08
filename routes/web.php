@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\GajiController;
 use App\Http\Controllers\Admin\BonusController;
 use App\Http\Controllers\Admin\CutiController;
 use App\Http\Controllers\Admin\LaporanController;
+use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Pegawai\PegawaiDashboardController;
 use App\Http\Controllers\Pegawai\SelfAssessmentController;
@@ -37,6 +38,11 @@ Route::middleware(['auth', 'role:admin', 'user.active'])
         // ==================== DASHBOARD ====================
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/dashboard/chart-data', [DashboardController::class, 'chartData'])->name('dashboard.chart');
+        
+        // ==================== PROFILE ====================
+        Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
+        Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+        Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
         
         // ==================== INFORMASI BPR ====================
         // BPR / Identitas BPR

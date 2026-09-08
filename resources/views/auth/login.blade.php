@@ -6,9 +6,10 @@
     
     {{-- ===== FAVICON ===== --}}
     @php
-        use App\Helpers\Helper;
-        $favicon = Helper::getFavicon();
-        $bprName = Helper::getBprName();
+        use App\Helpers\AppHelper;
+        $favicon = AppHelper::getFavicon();
+        $bprName = AppHelper::getBprName();
+        $logoUrl = AppHelper::getLogoOrDefault();
     @endphp
     <link rel="icon" href="{{ $favicon }}" type="image/x-icon">
     <link rel="shortcut icon" href="{{ $favicon }}" type="image/x-icon">
@@ -19,71 +20,169 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css'])
+    
+    <style>
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%);
+            padding: 20px;
+        }
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 400px;
+            width: 100%;
+        }
+        .login-logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .login-logo img {
+            max-height: 70px;
+            width: auto;
+            margin-bottom: 10px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .login-logo h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a365d;
+            margin-top: 8px;
+            margin-bottom: 0;
+        }
+        .login-logo p {
+            color: #718096;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .login-form .form-group {
+            margin-bottom: 20px;
+        }
+        .login-form label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #4a5568;
+            margin-bottom: 5px;
+        }
+        .login-form input[type="text"],
+        .login-form input[type="password"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .login-form input:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66,153,225,0.2);
+        }
+        .login-form .btn-login {
+            width: 100%;
+            padding: 12px;
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .login-form .btn-login:hover {
+            background: #3182ce;
+        }
+        .login-footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #a0aec0;
+        }
+        .login-error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        .login-remember {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #4a5568;
+        }
+        .login-remember input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #4299e1;
+        }
+    </style>
 </head>
-<body class="bg-gray-100 font-sans antialiased">
-    <div class="min-h-screen flex items-center justify-center">
-        <div class="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
+<body>
+    <div class="login-container">
+        <div class="login-box">
             <!-- Logo -->
-            <div class="text-center mb-8">
-                {{-- Logo BPR --}}
-                @php
-                    $logoUrl = Helper::getLogo();
-                @endphp
-                
-                @if($logoUrl)
-                    <img src="{{ $logoUrl }}" alt="Logo BPR" class="h-16 w-auto mx-auto mb-3">
+            <div class="login-logo">
+                @if($logoUrl && file_exists(public_path(str_replace(asset(''), '', $logoUrl))))
+                    <img src="{{ $logoUrl }}" alt="{{ $bprName }}">
+                    <h1>{{ $bprName }}</h1>
                 @else
-                    <h1 class="text-3xl font-bold text-blue-600">🏦 BPRS</h1>
-                    <h2 class="text-xl font-semibold text-gray-800">Amanah Bangsa</h2>
+                    <h1>🏦 {{ $bprName }}</h1>
                 @endif
-                
-                <p class="text-gray-500 text-sm mt-2">Sistem KPI & Penilaian Kinerja</p>
+                <p>Sistem KPI & Penilaian Kinerja</p>
             </div>
             
+            <!-- Error Messages -->
+            @if($errors->any())
+                <div class="login-error">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    {{ $errors->first() }}
+                </div>
+            @endif
+            
             <!-- Form Login -->
-            <form method="POST" action="{{ route('login') }}">
+            <form method="POST" action="{{ route('login') }}" class="login-form">
                 @csrf
                 
-                <div class="space-y-4">
-                    <div>
-                        <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-                        <input type="text" name="username" id="username" 
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 @error('username') border-red-500 @enderror"
-                               value="{{ old('username') }}" required autofocus>
-                        @error('username')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-                    
-                    <div>
-                        <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-                        <input type="password" name="password" id="password" 
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 @error('password') border-red-500 @enderror"
-                               required>
-                        @error('password')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-                    
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center">
-                            <input type="checkbox" name="remember" id="remember" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                            <label for="remember" class="ml-2 block text-sm text-gray-700">Ingat saya</label>
-                        </div>
-                        <a href="#" class="text-sm text-blue-600 hover:underline">Lupa password?</a>
-                    </div>
-                    
-                    <button type="submit" class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md transition duration-200">
-                        <i class="fas fa-sign-in-alt mr-2"></i> Login
-                    </button>
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" name="username" id="username" 
+                           value="{{ old('username') }}" required autofocus
+                           placeholder="Masukkan username">
                 </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" name="password" id="password" required
+                           placeholder="Masukkan password">
+                </div>
+                
+                <div class="form-group" style="display:flex; justify-content:space-between; align-items:center;">
+                    <label class="login-remember">
+                        <input type="checkbox" name="remember"> Ingat saya
+                    </label>
+                    <a href="#" style="color:#4299e1; font-size:14px; text-decoration:none;">Lupa password?</a>
+                </div>
+                
+                <button type="submit" class="btn-login">
+                    <i class="fas fa-sign-in-alt mr-2"></i> Login
+                </button>
             </form>
             
             <!-- Footer -->
-            <div class="mt-6 text-center">
-                <p class="text-xs text-gray-500">
-                    &copy; {{ date('Y') }} {{ $bprName }}. All rights reserved.
-                </p>
+            <div class="login-footer">
+                &copy; {{ date('Y') }} {{ $bprName }}. All rights reserved.
             </div>
         </div>
     </div>

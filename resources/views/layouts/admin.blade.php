@@ -7,14 +7,15 @@
     
     {{-- ===== FAVICON ===== --}}
     @php
-        use App\Helpers\Helper;
-        $favicon = Helper::getFavicon();
+        use App\Helpers\AppHelper;
+        $favicon = AppHelper::getFavicon();
+        $bprName = AppHelper::getBprName();
     @endphp
     <link rel="icon" href="{{ $favicon }}" type="image/x-icon">
     <link rel="shortcut icon" href="{{ $favicon }}" type="image/x-icon">
     <link rel="apple-touch-icon" href="{{ $favicon }}">
     
-    <title>@yield('title', Helper::getBprName())</title>
+    <title>@yield('title', $bprName)</title>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -101,7 +102,7 @@
         .navbar-logo {
             height: 40px;
             width: auto;
-            max-width: 120px;
+            max-width: 150px;
             object-fit: contain;
         }
         .navbar-logo-placeholder {
@@ -111,6 +112,33 @@
             font-size: 24px;
             font-weight: bold;
             color: #1F4E79;
+        }
+        
+        /* Logo fallback jika tidak ada gambar */
+        .logo-text {
+            font-size: 20px;
+            font-weight: 800;
+            color: #1F4E79;
+        }
+        .logo-text span {
+            color: #2563eb;
+        }
+
+        /* User profile dropdown */
+        .user-dropdown {
+            position: relative;
+        }
+        .user-dropdown .dropdown-menu {
+            right: 0;
+            left: auto;
+            min-width: 180px;
+        }
+        .user-dropdown .dropdown-menu a {
+            padding: 8px 16px;
+        }
+        .user-dropdown .dropdown-menu a i {
+            width: 18px;
+            margin-right: 8px;
         }
     </style>
 </head>
@@ -124,15 +152,14 @@
                     <div class="flex-shrink-0 flex items-center">
                         {{-- ===== LOGO BPR ===== --}}
                         @php
-                            $bpr = \App\Models\BPR::first();
-                            $logoUrl = $bpr && $bpr->logo ? asset('storage/' . $bpr->logo) : null;
+                            $logoUrl = AppHelper::getLogoOrDefault();
                         @endphp
                         
-                        @if($logoUrl)
-                            <img src="{{ $logoUrl }}" alt="Logo BPR" class="navbar-logo">
+                        @if($logoUrl && file_exists(public_path(str_replace(asset(''), '', $logoUrl))))
+                            <img src="{{ $logoUrl }}" alt="{{ AppHelper::getBprName() }}" class="navbar-logo">
                         @else
-                            <span class="text-xl font-bold text-blue-600">🏦 BPRS</span>
-                            <span class="text-xl font-bold text-gray-800"> Amanah Bangsa</span>
+                            <span class="logo-text">🏦 <span>BPRS</span></span>
+                            <span class="text-xl font-bold text-gray-800 ml-1">Amanah Bangsa</span>
                         @endif
                     </div>
                     
@@ -229,16 +256,23 @@
                     </div>
                 </div>
                 
-                <!-- User Menu -->
+                <!-- ===== USER MENU ===== -->
                 <div class="flex items-center space-x-4">
-                    <span class="text-sm text-gray-700">{{ Auth::user()->name }}</span>
-                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {{ Auth::user()->role }}
+                    <!-- Profile Link -->
+                    <a href="{{ route('admin.profile') }}" class="text-gray-700 hover:text-blue-600 text-sm flex items-center transition">
+                        <i class="fas fa-user-circle mr-1 text-lg"></i>
+                        <span class="hidden sm:inline">{{ Auth::user()->name }}</span>
+                    </a>
+                    
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 hidden sm:inline">
+                        {{ ucfirst(Auth::user()->role) }}
                     </span>
+                    
                     <form method="POST" action="{{ route('logout') }}" class="inline">
                         @csrf
-                        <button type="submit" class="text-gray-500 hover:text-gray-700 text-sm">
-                            <i class="fas fa-sign-out-alt"></i> Logout
+                        <button type="submit" class="text-gray-500 hover:text-gray-700 text-sm transition">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span class="hidden sm:inline"> Logout</span>
                         </button>
                     </form>
                 </div>
