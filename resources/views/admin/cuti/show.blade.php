@@ -1,54 +1,48 @@
 @extends('layouts.admin')
 
-@section('title', 'Detail Pengajuan Cuti')
+@section('title', 'Detail Cuti')
 
 @section('content')
 <div class="bg-white rounded-lg shadow p-6">
     <div class="flex justify-between items-center mb-6">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">Detail Pengajuan Cuti</h1>
-            <p class="text-sm text-gray-500 mt-1">Informasi lengkap pengajuan cuti</p>
+            <h1 class="text-2xl font-bold text-gray-900">Detail Cuti</h1>
+            <p class="text-sm text-gray-500">Informasi lengkap pengajuan cuti</p>
         </div>
-        <div class="flex space-x-2">
-            <a href="{{ route('admin.cuti.index') }}" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md text-sm">
-                <i class="fas fa-arrow-left mr-2"></i> Kembali
-            </a>
-            @if($cuti->status == 'pending')
-                <a href="{{ route('admin.cuti.edit', $cuti->id) }}" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm">
-                    <i class="fas fa-edit mr-2"></i> Edit
-                </a>
-            @endif
-        </div>
+        <a href="{{ route('admin.cuti.index') }}" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md">
+            <i class="fas fa-arrow-left mr-2"></i> Kembali
+        </a>
     </div>
 
-    <!-- Status Banner -->
-    <div class="mb-6 p-4 rounded-lg 
-        @if($cuti->status == 'pending') bg-yellow-50 border border-yellow-200
+    <div class="mb-6 p-4 rounded-lg
+        @if($cuti->status == 'proses') bg-yellow-50 border border-yellow-200
         @elseif($cuti->status == 'disetujui') bg-green-50 border border-green-200
-        @else bg-red-50 border border-red-200
+        @elseif($cuti->status == 'ditolak') bg-red-50 border border-red-200
+        @else bg-gray-50 border border-gray-200
         @endif">
         <div class="flex items-center">
-            <div class="flex-shrink-0">
-                @if($cuti->status == 'pending')
+            <div class="flex-shrink-0 mr-3">
+                @if($cuti->status == 'proses')
                     <i class="fas fa-clock text-yellow-500 text-2xl"></i>
                 @elseif($cuti->status == 'disetujui')
                     <i class="fas fa-check-circle text-green-500 text-2xl"></i>
-                @else
+                @elseif($cuti->status == 'ditolak')
                     <i class="fas fa-times-circle text-red-500 text-2xl"></i>
+                @else
+                    <i class="fas fa-ban text-gray-500 text-2xl"></i>
                 @endif
             </div>
-            <div class="ml-3">
-                <h3 class="text-sm font-medium 
-                    @if($cuti->status == 'pending') text-yellow-800
-                    @elseif($cuti->status == 'disetujui') text-green-800
-                    @else text-red-800
-                    @endif">
-                    Status: {{ ucfirst($cuti->status) }}
+            <div>
+                <h3 class="text-sm font-medium text-gray-800">
+                    Status: <strong>{{ ucfirst($cuti->status) }}</strong>
+                    @if($cuti->status == 'proses')
+                        — Level saat ini: <strong>{{ $cuti->current_approval_level }}</strong>
+                    @endif
                 </h3>
-                @if($cuti->status != 'pending')
+                @if($cuti->final_approved_at)
                     <p class="text-xs text-gray-600 mt-1">
-                        Diproses oleh: {{ $cuti->approvedBy->nama ?? '-' }} 
-                        pada {{ $cuti->approved_at ? Carbon\Carbon::parse($cuti->approved_at)->format('d/m/Y H:i') : '-' }}
+                        Final approved oleh <strong>{{ $cuti->finalApprovedBy->nama ?? '-' }}</strong>
+                        pada {{ $cuti->final_approved_at->format('d/m/Y H:i') }}
                     </p>
                 @endif
             </div>
@@ -56,7 +50,6 @@
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Informasi Pegawai -->
         <div class="border rounded-lg p-4">
             <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                 <i class="fas fa-user text-blue-600 mr-2"></i>
@@ -65,11 +58,11 @@
             <div class="space-y-3">
                 <div class="flex justify-between border-b pb-2">
                     <span class="text-gray-600">Nama</span>
-                    <span class="font-medium">{{ $cuti->pegawai->nama }}</span>
+                    <span class="font-medium">{{ $cuti->pegawai->nama ?? '-' }}</span>
                 </div>
                 <div class="flex justify-between border-b pb-2">
                     <span class="text-gray-600">NIP</span>
-                    <span class="font-medium">{{ $cuti->pegawai->nip }}</span>
+                    <span class="font-medium">{{ $cuti->pegawai->nip ?? '-' }}</span>
                 </div>
                 <div class="flex justify-between border-b pb-2">
                     <span class="text-gray-600">Jabatan</span>
@@ -82,7 +75,6 @@
             </div>
         </div>
 
-        <!-- Informasi Cuti -->
         <div class="border rounded-lg p-4">
             <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                 <i class="fas fa-calendar-alt text-blue-600 mr-2"></i>
@@ -91,23 +83,23 @@
             <div class="space-y-3">
                 <div class="flex justify-between border-b pb-2">
                     <span class="text-gray-600">Jenis Cuti</span>
-                    <span class="px-2 py-1 text-xs rounded-full 
-                        @if($cuti->jenis_cuti == 'tahunan') bg-blue-100 text-blue-800
-                        @elseif($cuti->jenis_cuti == 'sakit') bg-red-100 text-red-800
-                        @elseif($cuti->jenis_cuti == 'melahirkan') bg-pink-100 text-pink-800
-                        @elseif($cuti->jenis_cuti == 'khusus') bg-purple-100 text-purple-800
-                        @else bg-gray-100 text-gray-800
-                        @endif">
+                    <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
                         {{ ucfirst($cuti->jenis_cuti) }}
                     </span>
                 </div>
                 <div class="flex justify-between border-b pb-2">
                     <span class="text-gray-600">Tanggal Mulai</span>
-                    <span class="font-medium">{{ Carbon\Carbon::parse($cuti->tanggal_mulai)->format('d/m/Y') }}</span>
+                    <span class="font-medium">{{ $cuti->tanggal_mulai->format('d/m/Y') }}</span>
                 </div>
                 <div class="flex justify-between border-b pb-2">
                     <span class="text-gray-600">Tanggal Selesai</span>
-                    <span class="font-medium">{{ Carbon\Carbon::parse($cuti->tanggal_selesai)->format('d/m/Y') }}</span>
+                    <span class="font-medium">{{ $cuti->tanggal_selesai->format('d/m/Y') }}</span>
+                </div>
+                <div class="flex justify-between border-b pb-2">
+                    <span class="text-gray-600">Tanggal Masuk Kerja</span>
+                    <span class="font-medium">
+                        {{ $cuti->tanggal_masuk_kerja ? $cuti->tanggal_masuk_kerja->format('d/m/Y') : '-' }}
+                    </span>
                 </div>
                 <div class="flex justify-between border-b pb-2">
                     <span class="text-gray-600">Lama Cuti</span>
@@ -121,236 +113,237 @@
         </div>
     </div>
 
-    <!-- Detail Hari Cuti -->
-    <div class="mt-6 border rounded-lg p-4">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-            <i class="fas fa-list-ul text-blue-600 mr-2"></i>
-            Detail Hari Cuti
-        </h3>
-        
-        <!-- Summary -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div class="bg-blue-50 rounded-lg p-3 text-center">
-                <p class="text-sm text-gray-600">Total Hari Kalender</p>
-                <p class="text-xl font-bold text-blue-600">{{ $totalHariKalender }}</p>
-            </div>
-            <div class="bg-green-50 rounded-lg p-3 text-center">
-                <p class="text-sm text-gray-600">Hari Kerja</p>
-                <p class="text-xl font-bold text-green-600">{{ $hariKerja }}</p>
-            </div>
-            <div class="bg-red-50 rounded-lg p-3 text-center">
-                <p class="text-sm text-gray-600">Hari Libur (Sabtu/Minggu)</p>
-                <p class="text-xl font-bold text-red-600">{{ $hariLibur }}</p>
-            </div>
-            <div class="bg-yellow-50 rounded-lg p-3 text-center">
-                <p class="text-sm text-gray-600">Status</p>
-                <p class="text-xl font-bold 
-                    @if($cuti->status == 'pending') text-yellow-600
-                    @elseif($cuti->status == 'disetujui') text-green-600
-                    @else text-red-600
-                    @endif">
-                    {{ ucfirst($cuti->status) }}
-                </p>
-            </div>
-        </div>
+    {{-- ==================== SURAT DOKTER ==================== --}}
+    @if($cuti->jenis_cuti === 'sakit')
+    <div class="mt-6 border-2 border-red-200 rounded-lg p-4 bg-red-50">
+        <h3 class="text-lg font-semibold text-red-800 mb-3 flex items-center">
+            <i class="fas fa-file-medical mr-2"></i>
+            Surat Dokter
 
-        <!-- Table Hari -->
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">No</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Hari</th>
-                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    @foreach($detailHari as $index => $hari)
-                    <tr class="{{ $hari['is_weekend'] ? 'bg-red-50' : '' }}">
-                        <td class="px-4 py-2 text-sm text-gray-500">{{ $index + 1 }}</td>
-                        <td class="px-4 py-2 text-sm text-gray-900">{{ $hari['format'] }}</td>
-                        <td class="px-4 py-2 text-sm text-gray-900">{{ $hari['hari'] }}</td>
-                        <td class="px-4 py-2 text-sm">
-                            @if($hari['is_weekend'])
-                                <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">
-                                    <i class="fas fa-times mr-1"></i> Libur
-                                </span>
-                            @else
-                                <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
-                                    <i class="fas fa-check mr-1"></i> Hari Kerja
-                                </span>
-                            @endif
-                        </td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
+            @if($cuti->surat_dokter_status === 'disetujui')
+                <span class="ml-2 px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800">
+                    <i class="fas fa-check-circle mr-1"></i> Disetujui
+                </span>
+            @elseif($cuti->surat_dokter_status === 'ditolak')
+                <span class="ml-2 px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-800">
+                    <i class="fas fa-times-circle mr-1"></i> Ditolak
+                </span>
+            @elseif($cuti->surat_dokter)
+                <span class="ml-2 px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-800">
+                    <i class="fas fa-clock mr-1"></i> Menunggu Verifikasi
+                </span>
+            @else
+                <span class="ml-2 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-800">
+                    Belum Upload
+                </span>
+            @endif
+        </h3>
+
+        @if($cuti->surat_dokter)
+            <div class="bg-white rounded-lg p-4">
+                @if($cuti->surat_dokter_is_image)
+                    <div class="mb-3">
+                        <img src="{{ asset('storage/' . $cuti->surat_dokter) }}"
+                             alt="Surat Dokter"
+                             class="max-w-full h-auto max-h-96 rounded border border-gray-300 mx-auto block">
+                    </div>
+                @elseif($cuti->surat_dokter_is_pdf)
+                    <div class="mb-3">
+                        <iframe src="{{ asset('storage/' . $cuti->surat_dokter) }}"
+                                class="w-full h-96 border border-gray-300 rounded"></iframe>
+                    </div>
+                @endif
+
+                <div class="flex flex-wrap justify-center gap-2 mt-4 pt-4 border-t border-gray-200">
+                    <a href="{{ asset('storage/' . $cuti->surat_dokter) }}"
+                       target="_blank"
+                       class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm">
+                        <i class="fas fa-external-link-alt mr-1"></i> Buka
+                    </a>
+                    <a href="{{ route('admin.cuti.download-surat-dokter', $cuti->id) }}"
+                       class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm">
+                        <i class="fas fa-download mr-1"></i> Download
+                    </a>
+
+                    @if($cuti->surat_dokter_status !== 'disetujui')
+                        <form action="{{ route('admin.cuti.approve-surat-dokter', $cuti->id) }}" method="POST"
+                              class="inline"
+                              onsubmit="return confirm('Setujui surat dokter ini?')">
+                            @csrf
+                            <button type="submit"
+                                    class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm">
+                                <i class="fas fa-check mr-1"></i> Setujui Surat
+                            </button>
+                        </form>
+                    @endif
+
+                    @if($cuti->surat_dokter_status !== 'ditolak')
+                        <button type="button" onclick="openRejectSuratModal()"
+                                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm">
+                            <i class="fas fa-times mr-1"></i> Tolak Surat
+                        </button>
+                    @endif
+                </div>
+            </div>
+        @else
+            <div class="bg-white rounded-lg p-4">
+                @if($cuti->status === 'disetujui')
+                    <p class="text-sm text-yellow-700 text-center">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        Pegawai belum mengupload surat dokter. Cuti sudah disetujui, tunggu pegawai upload.
+                    </p>
+                @else
+                    <p class="text-sm text-gray-600 text-center">
+                        <i class="fas fa-hourglass-half mr-1"></i>
+                        Surat dokter dapat diupload setelah cuti disetujui final.
+                    </p>
+                @endif
+            </div>
+        @endif
+    </div>
+
+    {{-- Modal Tolak Surat --}}
+    <div id="rejectSuratModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+                <form action="{{ route('admin.cuti.reject-surat-dokter', $cuti->id) }}" method="POST">
+                    @csrf
+                    <div class="px-6 py-4 border-b">
+                        <h3 class="text-lg font-semibold text-red-700">
+                            <i class="fas fa-times-circle mr-2"></i> Tolak Surat Dokter
+                        </h3>
+                    </div>
+                    <div class="px-6 py-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Alasan Penolakan <span class="text-red-500">*</span>
+                        </label>
+                        <textarea name="catatan_surat" rows="4" required
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                  placeholder="Contoh: Surat kurang jelas, tidak ada tanda tangan dokter, dll."></textarea>
+                        <p class="text-xs text-gray-500 mt-2">
+                            Pegawai akan melihat alasan ini dan dapat mengupload ulang.
+                        </p>
+                    </div>
+                    <div class="px-6 py-4 border-t bg-gray-50 flex justify-end gap-2">
+                        <button type="button" onclick="closeRejectSuratModal()"
+                                class="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded-md text-sm">
+                            Batal
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm">
+                            <i class="fas fa-times mr-1"></i> Tolak
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
-    <!-- Aksi untuk Admin -->
+    <script>
+        function openRejectSuratModal() {
+            document.getElementById('rejectSuratModal').classList.remove('hidden');
+        }
+        function closeRejectSuratModal() {
+            document.getElementById('rejectSuratModal').classList.add('hidden');
+        }
+    </script>
+    @endif
+
+    <!-- Alur Approval -->
+    <div class="mt-6 border rounded-lg p-4">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <i class="fas fa-route text-blue-600 mr-2"></i>
+            Alur Approval
+        </h3>
+        <div class="space-y-3">
+            @forelse($cuti->approvals as $ap)
+            <div class="border-l-4 pl-4 py-2 rounded-r-md
+                @if($ap->status == 'disetujui') border-green-500 bg-green-50
+                @elseif($ap->status == 'ditolak') border-red-500 bg-red-50
+                @elseif($ap->status == 'pending') border-yellow-500 bg-yellow-50
+                @else border-gray-300 bg-gray-50
+                @endif">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="font-medium">
+                            Level {{ $ap->level }}: {{ $ap->approver->nama ?? '-' }}
+                            @if($ap->is_final)
+                                <span class="ml-2 px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-800">
+                                    FINAL
+                                </span>
+                            @endif
+                        </p>
+                        <p class="text-xs text-gray-500 mt-1">
+                            Diminta oleh: {{ $ap->requestedBy->nama ?? '-' }}
+                            @if($ap->approved_at)
+                                | {{ $ap->approved_at->format('d/m/Y H:i') }}
+                            @endif
+                        </p>
+                        @if($ap->catatan)
+                        <p class="text-sm text-gray-700 mt-1">
+                            <i class="fas fa-comment mr-1"></i> {{ $ap->catatan }}
+                        </p>
+                        @endif
+                    </div>
+                    <span class="px-2 py-1 text-xs rounded-full
+                        @if($ap->status == 'disetujui') bg-green-100 text-green-800
+                        @elseif($ap->status == 'ditolak') bg-red-100 text-red-800
+                        @elseif($ap->status == 'pending') bg-yellow-100 text-yellow-800
+                        @else bg-gray-100 text-gray-800
+                        @endif">
+                        @if($ap->status == 'menunggu') Menunggu @else {{ ucfirst($ap->status) }} @endif
+                    </span>
+                </div>
+            </div>
+            @empty
+            <p class="text-sm text-gray-500">Belum ada alur approval.</p>
+            @endforelse
+        </div>
+    </div>
+
+    <!-- Aksi -->
     <div class="mt-6 flex flex-wrap gap-2">
-        @if($cuti->status == 'pending')
-            <a href="{{ route('admin.cuti.approve', $cuti->id) }}" 
-               onclick="return confirm('Setujui pengajuan cuti ini?')"
+        @if($cuti->status == 'disetujui')
+            <a href="{{ route('admin.cuti.cetak-surat', $cuti->id) }}" target="_blank"
+               class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md">
+                <i class="fas fa-file-pdf mr-2"></i> Preview Surat Cuti
+            </a>
+            <a href="{{ route('admin.cuti.download-surat', $cuti->id) }}"
                class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md">
-                <i class="fas fa-check mr-2"></i> Setujui
+                <i class="fas fa-download mr-2"></i> Download Surat Cuti
             </a>
-            <a href="{{ route('admin.cuti.reject', $cuti->id) }}" 
-               onclick="return confirm('Tolak pengajuan cuti ini?')"
-               class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md">
-                <i class="fas fa-times mr-2"></i> Tolak
-            </a>
-            <a href="{{ route('admin.cuti.edit', $cuti->id) }}" 
+        @endif
+
+        @if($cuti->status == 'proses')
+            <form action="{{ route('admin.cuti.approve', $cuti->id) }}" method="POST" class="inline"
+                  onsubmit="return confirm('Setujui cuti ini sebagai admin?')">
+                @csrf
+                <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md">
+                    <i class="fas fa-check mr-2"></i> Setujui (Admin)
+                </button>
+            </form>
+            <form action="{{ route('admin.cuti.reject', $cuti->id) }}" method="POST" class="inline"
+                  onsubmit="return confirm('Tolak cuti ini sebagai admin?')">
+                @csrf
+                <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md">
+                    <i class="fas fa-times mr-2"></i> Tolak (Admin)
+                </button>
+            </form>
+            <a href="{{ route('admin.cuti.edit', $cuti->id) }}"
                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md">
                 <i class="fas fa-edit mr-2"></i> Edit
             </a>
-        @elseif($cuti->status == 'disetujui')
-            <a href="#" 
-               onclick="confirmCancelApproval('{{ route('admin.cuti.cancel-approval', $cuti->id) }}', '{{ $cuti->pegawai->nama }}')"
-               class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md">
-                <i class="fas fa-undo mr-2"></i> Batalkan Persetujuan
-            </a>
-        @elseif($cuti->status == 'ditolak')
-            <a href="#" 
-               onclick="confirmReopen('{{ route('admin.cuti.reopen', $cuti->id) }}', '{{ $cuti->pegawai->nama }}')"
-               class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md">
-                <i class="fas fa-redo mr-2"></i> Buka Kembali
-            </a>
+        @endif
+
+        @if(in_array($cuti->status, ['proses', 'disetujui']))
+            <form action="{{ route('admin.cuti.cancel', $cuti->id) }}" method="POST" class="inline"
+                  onsubmit="return confirm('Yakin batalkan cuti ini?')">
+                @csrf
+                <button type="submit" class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md">
+                    <i class="fas fa-ban mr-2"></i> Batalkan
+                </button>
+            </form>
         @endif
     </div>
 </div>
-
-<!-- Modal Konfirmasi Buka Kembali (Reopen) -->
-<div id="reopenModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-        <div class="mt-3 text-center">
-            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                <i class="fas fa-redo text-green-600 text-xl"></i>
-            </div>
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mt-4">Konfirmasi Buka Kembali</h3>
-            <div class="mt-2 px-7 py-3">
-                <p class="text-sm text-gray-500">
-                    Apakah Anda yakin ingin membuka kembali pengajuan cuti <strong id="reopenNama"></strong>?
-                </p>
-                <p class="text-xs text-green-600 mt-2">
-                    <i class="fas fa-info-circle mr-1"></i> 
-                    Status akan kembali menjadi <strong>Pending</strong> dan dapat diproses ulang.
-                </p>
-            </div>
-            <div class="items-center px-4 py-3">
-                <form id="reopenForm" method="GET" class="inline">
-                    <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-base font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-300 mr-2">
-                        <i class="fas fa-redo mr-1"></i> Buka Kembali
-                    </button>
-                    <button type="button" onclick="closeReopenModal()" class="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 text-base font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
-                        Batal
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Konfirmasi Batalkan Persetujuan -->
-<div id="cancelApprovalModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-        <div class="mt-3 text-center">
-            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100">
-                <i class="fas fa-undo text-orange-600 text-xl"></i>
-            </div>
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mt-4">Konfirmasi Batalkan Persetujuan</h3>
-            <div class="mt-2 px-7 py-3">
-                <p class="text-sm text-gray-500">
-                    Apakah Anda yakin ingin membatalkan persetujuan cuti <strong id="cancelApprovalNama"></strong>?
-                </p>
-                <p class="text-xs text-orange-600 mt-2">
-                    <i class="fas fa-info-circle mr-1"></i> 
-                    Status akan kembali menjadi <strong>Pending</strong> dan saldo cuti akan dikembalikan.
-                </p>
-            </div>
-            <div class="items-center px-4 py-3">
-                <form id="cancelApprovalForm" method="GET" class="inline">
-                    <button type="submit" class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-base font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-300 mr-2">
-                        <i class="fas fa-undo mr-1"></i> Batalkan
-                    </button>
-                    <button type="button" onclick="closeCancelApprovalModal()" class="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 text-base font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
-                        Batal
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-@push('scripts')
-<script>
-    // ==================== REOPEN MODAL ====================
-    function confirmReopen(url, nama) {
-        event.preventDefault();
-        const modal = document.getElementById('reopenModal');
-        const form = document.getElementById('reopenForm');
-        const namaSpan = document.getElementById('reopenNama');
-        
-        namaSpan.textContent = nama;
-        form.action = url;
-        
-        modal.classList.remove('hidden');
-    }
-
-    function closeReopenModal() {
-        document.getElementById('reopenModal').classList.add('hidden');
-    }
-
-    // ==================== CANCEL APPROVAL MODAL ====================
-    function confirmCancelApproval(url, nama) {
-        event.preventDefault();
-        const modal = document.getElementById('cancelApprovalModal');
-        const form = document.getElementById('cancelApprovalForm');
-        const namaSpan = document.getElementById('cancelApprovalNama');
-        
-        namaSpan.textContent = nama;
-        form.action = url;
-        
-        modal.classList.remove('hidden');
-    }
-
-    function closeCancelApprovalModal() {
-        document.getElementById('cancelApprovalModal').classList.add('hidden');
-    }
-
-    // ==================== CLOSE MODALS ON OUTSIDE CLICK ====================
-    window.onclick = function(event) {
-        const reopenModal = document.getElementById('reopenModal');
-        const cancelApprovalModal = document.getElementById('cancelApprovalModal');
-        
-        if (event.target == reopenModal) {
-            reopenModal.classList.add('hidden');
-        }
-        if (event.target == cancelApprovalModal) {
-            cancelApprovalModal.classList.add('hidden');
-        }
-    }
-
-    // ==================== AUTO CLOSE ON SUBMIT ====================
-    document.addEventListener('DOMContentLoaded', function() {
-        // Reopen form
-        const reopenForm = document.getElementById('reopenForm');
-        if (reopenForm) {
-            reopenForm.addEventListener('submit', function() {
-                closeReopenModal();
-            });
-        }
-        
-        // Cancel approval form
-        const cancelApprovalForm = document.getElementById('cancelApprovalForm');
-        if (cancelApprovalForm) {
-            cancelApprovalForm.addEventListener('submit', function() {
-                closeCancelApprovalModal();
-            });
-        }
-    });
-</script>
-@endpush
 @endsection

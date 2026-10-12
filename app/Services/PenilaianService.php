@@ -16,72 +16,53 @@ use Carbon\Carbon;
 
 class PenilaianService
 {
-    /**
-     * Get all penilai for a pegawai
-     */
     public function getPenilaiForPegawai($pegawaiId)
     {
         $pegawai = Pegawai::with(['jabatan.atasan', 'atasanLangsung'])->findOrFail($pegawaiId);
-        
+
         $penilai = [];
-        
-        // 1. Self Assessment (pegawai sendiri)
         $penilai['self'] = $pegawai;
-        
-        // 2. Atasan Langsung
+
         if ($pegawai->atasanLangsung) {
             $penilai['atasan_langsung'] = $pegawai->atasanLangsung;
         }
-        
-        // 3. Atasan Penilai
+
         if ($pegawai->atasanLangsung && $pegawai->atasanLangsung->atasanLangsung) {
             $penilai['atasan_penilai'] = $pegawai->atasanLangsung->atasanLangsung;
         }
-        
+
         return $penilai;
     }
 
-    /**
-     * Check if pegawai has atasan
-     */
     public function hasAtasan($pegawaiId)
     {
         $pegawai = Pegawai::find($pegawaiId);
         return $pegawai && $pegawai->atasan_langsung_id ? true : false;
     }
 
-    /**
-     * Check if pegawai has atasan penilai
-     */
     public function hasAtasanPenilai($pegawaiId)
     {
         $pegawai = Pegawai::with('atasanLangsung.atasanLangsung')->find($pegawaiId);
         return $pegawai && $pegawai->atasanLangsung && $pegawai->atasanLangsung->atasanLangsung ? true : false;
     }
 
-    /**
-     * Get required penilai levels
-     */
     public function getRequiredLevels($pegawaiId)
     {
         $pegawai = Pegawai::find($pegawaiId);
         $levels = ['self'];
-        
+
         if ($pegawai && $pegawai->atasan_langsung_id) {
             $levels[] = 'atasan_langsung';
-            
+
             $atasanLangsung = $pegawai->atasanLangsung;
             if ($atasanLangsung && $atasanLangsung->atasan_langsung_id) {
                 $levels[] = 'atasan_penilai';
             }
         }
-        
+
         return $levels;
     }
 
-    /**
-     * Get indikator untuk jabatan
-     */
     public function getIndikatorForJabatan($jabatanId)
     {
         return [
@@ -91,47 +72,38 @@ class PenilaianService
         ];
     }
 
-    /**
-     * Calculate nilai total dengan konversi skala
-     * KPI: 0-100, Kompetensi: 1-5 (dikonversi ke 0-100), Core Values: 1-5 (dikonversi ke 0-100)
-     */
     public function calculateNilaiTotal($nilaiKPI, $nilaiKompetensi, $nilaiCoreValues, $bobot)
     {
-        // Konversi kompetensi dari skala 1-5 ke 0-100
         $nilaiKompetensiKonversi = ($nilaiKompetensi / 5) * 100;
-        
-        // Konversi core values dari skala 1-5 ke 0-100
         $nilaiCoreKonversi = ($nilaiCoreValues / 5) * 100;
-        
+
         $nilaiTotal = ($nilaiKPI * $bobot->bobot_kpi / 100) +
                       ($nilaiKompetensiKonversi * $bobot->bobot_kompetensi / 100) +
                       ($nilaiCoreKonversi * $bobot->bobot_core_values / 100);
-        
+
         return round($nilaiTotal, 2);
     }
 
     /**
-     * Save penilaian
+     * Save penilaian dengan komentar per indikator (array)
      */
     public function savePenilaian($data)
     {
         $periode = PeriodePenilaian::where('is_active', true)->first();
-        
+
         if (!$periode) {
             throw new \Exception('Tidak ada periode penilaian aktif');
         }
-        
-        // Hitung rata-rata nilai
+
         $avgKPI = array_sum($data['nilai_kpi']) / count($data['nilai_kpi']);
         $avgKompetensi = array_sum($data['nilai_kompetensi']) / count($data['nilai_kompetensi']);
         $avgCoreValues = array_sum($data['nilai_core_values']) / count($data['nilai_core_values']);
-        
-        // Ambil bobot
+
         $pegawai = Pegawai::find($data['pegawai_id']);
         $bobot = BobotPenilaian::where('jabatan_id', $pegawai->jabatan_id)
             ->where('periode_id', $periode->id)
             ->first();
-        
+
         if (!$bobot) {
             $bobot = (object) [
                 'bobot_kpi' => 70,
@@ -139,56 +111,57 @@ class PenilaianService
                 'bobot_core_values' => 15,
             ];
         }
-        
-        // Hitung nilai total dengan konversi
+
         $nilaiTotal = $this->calculateNilaiTotal($avgKPI, $avgKompetensi, $avgCoreValues, $bobot);
-        
-        // Simpan penilaian
+
+        // Bersihkan komentar (array per indikator)
+        $komentarKPI = array_map(fn($v) => trim($v ?? ''), $data['komentar_kpi'] ?? []);
+        $komentarKompetensi = array_map(fn($v) => trim($v ?? ''), $data['komentar_kompetensi'] ?? []);
+        $komentarCoreValues = array_map(fn($v) => trim($v ?? ''), $data['komentar_core_values'] ?? []);
+
         $penilaian = PenilaianKPI::create([
             'pegawai_id' => $data['pegawai_id'],
             'penilai_id' => $data['penilai_id'],
             'periode_id' => $periode->id,
             'level_penilai' => $data['level_penilai'],
             'nilai_kpi' => round($avgKPI, 2),
-            'nilai_kompetensi' => round($avgKompetensi, 2), // Nilai asli 1-5
-            'nilai_core_values' => round($avgCoreValues, 2), // Nilai asli 1-5
+            'nilai_kompetensi' => round($avgKompetensi, 2),
+            'nilai_core_values' => round($avgCoreValues, 2),
             'nilai_total' => $nilaiTotal,
             'detail_indikator' => json_encode([
                 'kpi' => $data['nilai_kpi'],
                 'kompetensi' => $data['nilai_kompetensi'],
                 'core_values' => $data['nilai_core_values'],
+                'komentar_kpi' => $komentarKPI,
+                'komentar_kompetensi' => $komentarKompetensi,
+                'komentar_core_values' => $komentarCoreValues,
             ]),
             'status' => 'submitted',
             'submitted_at' => Carbon::now(),
         ]);
-        
+
         $this->checkAndFinalize($data['pegawai_id'], $periode->id);
-        
+
         return $penilaian;
     }
 
-    /**
-     * Save penilaian with detail (including comments)
-     */
     public function savePenilaianWithDetail($data, $detail)
     {
         $periode = PeriodePenilaian::where('is_active', true)->first();
-        
+
         if (!$periode) {
             throw new \Exception('Tidak ada periode penilaian aktif');
         }
-        
-        // Hitung rata-rata nilai
+
         $avgKPI = array_sum($data['nilai_kpi']) / count($data['nilai_kpi']);
         $avgKompetensi = array_sum($data['nilai_kompetensi']) / count($data['nilai_kompetensi']);
         $avgCoreValues = array_sum($data['nilai_core_values']) / count($data['nilai_core_values']);
-        
-        // Ambil bobot
+
         $pegawai = Pegawai::find($data['pegawai_id']);
         $bobot = BobotPenilaian::where('jabatan_id', $pegawai->jabatan_id)
             ->where('periode_id', $periode->id)
             ->first();
-        
+
         if (!$bobot) {
             $bobot = (object) [
                 'bobot_kpi' => 70,
@@ -196,66 +169,58 @@ class PenilaianService
                 'bobot_core_values' => 15,
             ];
         }
-        
-        // Hitung nilai total dengan konversi
+
         $nilaiTotal = $this->calculateNilaiTotal($avgKPI, $avgKompetensi, $avgCoreValues, $bobot);
-        
-        // Simpan penilaian
+
         $penilaian = PenilaianKPI::create([
             'pegawai_id' => $data['pegawai_id'],
             'penilai_id' => $data['penilai_id'],
             'periode_id' => $periode->id,
             'level_penilai' => $data['level_penilai'],
             'nilai_kpi' => round($avgKPI, 2),
-            'nilai_kompetensi' => round($avgKompetensi, 2), // Nilai asli 1-5
-            'nilai_core_values' => round($avgCoreValues, 2), // Nilai asli 1-5
+            'nilai_kompetensi' => round($avgKompetensi, 2),
+            'nilai_core_values' => round($avgCoreValues, 2),
             'nilai_total' => $nilaiTotal,
             'detail_indikator' => json_encode($detail),
             'status' => 'submitted',
             'submitted_at' => Carbon::now(),
         ]);
-        
+
         $this->checkAndFinalize($data['pegawai_id'], $periode->id);
-        
+
         return $penilaian;
     }
 
-    /**
-     * Check and finalize
-     */
     public function checkAndFinalize($pegawaiId, $periodeId)
     {
         $requiredLevels = $this->getRequiredLevels($pegawaiId);
-        
+
         $completedLevels = PenilaianKPI::where('pegawai_id', $pegawaiId)
             ->where('periode_id', $periodeId)
             ->pluck('level_penilai')
             ->toArray();
-        
+
         $completed = array_intersect($requiredLevels, $completedLevels);
-        
+
         if (count($completed) === count($requiredLevels)) {
             $this->finalizePenilaian($pegawaiId, $periodeId);
         }
     }
 
-    /**
-     * Finalize penilaian
-     */
     public function finalizePenilaian($pegawaiId, $periodeId)
     {
         $pegawai = Pegawai::find($pegawaiId);
         $periode = PeriodePenilaian::find($periodeId);
-        
+
         $penilaian = PenilaianKPI::where('pegawai_id', $pegawaiId)
             ->where('periode_id', $periodeId)
             ->get()
             ->keyBy('level_penilai');
-        
+
         $bobot = BobotPenilaian::where('jabatan_id', $pegawai->jabatan_id)
             ->where('periode_id', $periodeId)
             ->first();
-        
+
         if (!$bobot) {
             $bobot = (object) [
                 'bobot_self' => 20,
@@ -263,16 +228,14 @@ class PenilaianService
                 'bobot_atasan_penilai' => 30,
             ];
         }
-        
-        // Ambil nilai total dari masing-masing level (sudah dihitung dengan konversi)
+
         $nilaiSelf = $penilaian['self']->nilai_total ?? 0;
         $nilaiAtasan = $penilaian['atasan_langsung']->nilai_total ?? 0;
         $nilaiPenilai = $penilaian['atasan_penilai']->nilai_total ?? 0;
-        
+
         $hasAtasan = $this->hasAtasan($pegawaiId);
         $hasAtasanPenilai = $this->hasAtasanPenilai($pegawaiId);
-        
-        // Calculate final score
+
         if (!$hasAtasan) {
             $nilaiAkhir = $nilaiSelf;
         } elseif (!$hasAtasanPenilai) {
@@ -282,13 +245,13 @@ class PenilaianService
                           ($nilaiAtasan * $bobot->bobot_atasan_langsung / 100) +
                           ($nilaiPenilai * $bobot->bobot_atasan_penilai / 100);
         }
-        
+
         $nilaiAkhir = round($nilaiAkhir, 2);
-        
+
         $predikat = PredikatKinerja::where('batas_bawah', '<=', $nilaiAkhir)
             ->where('batas_atas', '>=', $nilaiAkhir)
             ->first();
-        
+
         $hasil = HasilPenilaian::updateOrCreate(
             [
                 'pegawai_id' => $pegawaiId,
@@ -303,13 +266,10 @@ class PenilaianService
                 'status' => 'final',
             ]
         );
-        
+
         return $hasil;
     }
 
-    /**
-     * Get progress penilaian
-     */
     public function getProgress($pegawaiId, $periodeId)
     {
         $pegawai = Pegawai::find($pegawaiId);
@@ -317,20 +277,17 @@ class PenilaianService
             ->where('periode_id', $periodeId)
             ->get()
             ->keyBy('level_penilai');
-        
+
         $requiredLevels = $this->getRequiredLevels($pegawaiId);
-        
         $levels = [];
-        
-        // Self Assessment
+
         $levels['self'] = [
             'label' => 'Self Assessment',
             'required' => in_array('self', $requiredLevels),
             'completed' => isset($penilaian['self']),
             'nilai' => $penilaian['self']->nilai_total ?? null,
         ];
-        
-        // Atasan Langsung
+
         $hasAtasan = $this->hasAtasan($pegawaiId);
         if ($hasAtasan) {
             $levels['atasan_langsung'] = [
@@ -340,8 +297,7 @@ class PenilaianService
                 'nilai' => $penilaian['atasan_langsung']->nilai_total ?? null,
             ];
         }
-        
-        // Atasan Penilai
+
         $hasAtasanPenilai = $this->hasAtasanPenilai($pegawaiId);
         if ($hasAtasanPenilai) {
             $levels['atasan_penilai'] = [
@@ -351,11 +307,11 @@ class PenilaianService
                 'nilai' => $penilaian['atasan_penilai']->nilai_total ?? null,
             ];
         }
-        
+
         $hasil = HasilPenilaian::where('pegawai_id', $pegawaiId)
             ->where('periode_id', $periodeId)
             ->first();
-        
+
         return [
             'levels' => $levels,
             'finalized' => $hasil && $hasil->status === 'final',
@@ -365,9 +321,6 @@ class PenilaianService
         ];
     }
 
-    /**
-     * Get penilaian by pegawai
-     */
     public function getPenilaianByPegawai($pegawaiId, $periodeId)
     {
         return PenilaianKPI::with(['penilai'])
@@ -377,9 +330,6 @@ class PenilaianService
             ->keyBy('level_penilai');
     }
 
-    /**
-     * Check if pegawai has self assessment
-     */
     public function hasSelfAssessment($pegawaiId, $periodeId)
     {
         return PenilaianKPI::where('pegawai_id', $pegawaiId)
@@ -388,9 +338,6 @@ class PenilaianService
             ->exists();
     }
 
-    /**
-     * Check if pegawai has atasan langsung assessment
-     */
     public function hasAtasanLangsungAssessment($pegawaiId, $periodeId)
     {
         return PenilaianKPI::where('pegawai_id', $pegawaiId)
@@ -399,9 +346,6 @@ class PenilaianService
             ->exists();
     }
 
-    /**
-     * Check if pegawai has atasan penilai assessment
-     */
     public function hasAtasanPenilaiAssessment($pegawaiId, $periodeId)
     {
         return PenilaianKPI::where('pegawai_id', $pegawaiId)
@@ -410,9 +354,6 @@ class PenilaianService
             ->exists();
     }
 
-    /**
-     * Get total self assessment
-     */
     public function getTotalSelfAssessment($periodeId)
     {
         return PenilaianKPI::where('periode_id', $periodeId)
@@ -421,9 +362,6 @@ class PenilaianService
             ->count('pegawai_id');
     }
 
-    /**
-     * Get total final
-     */
     public function getTotalFinal($periodeId)
     {
         return HasilPenilaian::where('periode_id', $periodeId)
@@ -431,9 +369,6 @@ class PenilaianService
             ->count();
     }
 
-    /**
-     * Get statistik penilaian
-     */
     public function getStatistik($periodeId)
     {
         $data = HasilPenilaian::with(['predikat'])

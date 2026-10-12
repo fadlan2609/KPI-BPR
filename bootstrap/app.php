@@ -3,9 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Http\Middleware\HandleCors;
-use Illuminate\Foundation\Http\Middleware\ValidatePostSize;
-use Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -14,7 +12,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // Register middleware aliases
+        // ==================== MIDDLEWARE ALIASES ====================
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
             'user.active' => \App\Http\Middleware\UserActiveMiddleware::class,
@@ -22,33 +20,27 @@ return Application::configure(basePath: dirname(__DIR__))
             'log.activity' => \App\Http\Middleware\LogActivityMiddleware::class,
         ]);
 
-        // Register middleware groups
-        $middleware->appendToGroup('web', [
-            \App\Http\Middleware\EncryptCookies::class,
-            \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
-            \Illuminate\Session\Middleware\StartSession::class,
-            \Illuminate\View\Middleware\ShareErrorsFromSession::class,
-            \App\Http\Middleware\VerifyCsrfToken::class,
-            \Illuminate\Routing\Middleware\SubstituteBindings::class,
-        ]);
+        // ==================== CUSTOM WEB MIDDLEWARE ====================
+        // Hanya yang custom — sisanya sudah otomatis oleh Laravel 12
+        // (Kosongkan kalau VerifyCsrfToken custom tidak dipakai)
 
-        $middleware->appendToGroup('api', [
-            \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
-            \Illuminate\Routing\Middleware\SubstituteBindings::class,
-        ]);
-
-        // Register global middleware
-        $middleware->use([
-            // TrustProxies dihapus karena tidak dibutuhkan di development
-            // \App\Http\Middleware\TrustProxies::class,
-            HandleCors::class,
-            \App\Http\Middleware\PreventRequestsDuringMaintenance::class,
-            ValidatePostSize::class,
-            \App\Http\Middleware\TrimStrings::class,
-            ConvertEmptyStringsToNull::class,
-        ]);
+        // ==================== CUSTOM API MIDDLEWARE ====================
+        // (Kosongkan kalau tidak ada custom API middleware)
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // ==================== CUSTOM 429 HANDLER ====================
+        $exceptions->render(function (TooManyRequestsHttpException $e, $request) {
+            if ($request->is('login') || $request->routeIs('login.post')) {
+                $retryAfter = $e->getHeaders()['Retry-After'] ?? 60;
+                $seconds = (int) $retryAfter;
+                $minutes = ceil($seconds / 60);
+
+                return response()->view('auth.login-blocked', [
+                    'retryAfter' => $retryAfter,
+                    'minutes' => $minutes,
+                    'seconds' => $seconds,
+                ], 429);
+            }
+        });
     })
     ->create();

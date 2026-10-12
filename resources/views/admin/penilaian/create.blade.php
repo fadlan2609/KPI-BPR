@@ -8,7 +8,7 @@
         <div>
             <h1 class="text-2xl font-bold text-gray-900">Form Penilaian</h1>
             <p class="text-sm text-gray-500">
-                Pegawai: {{ $pegawai->nama }} ({{ $pegawai->nip }}) - 
+                Pegawai: {{ $pegawai->nama }} ({{ $pegawai->nip }}) -
                 Jabatan: {{ $pegawai->jabatan->nama }}
             </p>
         </div>
@@ -17,7 +17,7 @@
         </a>
     </div>
 
-    <!-- Info Level Penilai -->
+    {{-- Info Level Penilai --}}
     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div class="flex items-center">
             <i class="fas fa-user-check text-blue-600 text-xl mr-3"></i>
@@ -36,7 +36,7 @@
         <input type="hidden" name="periode_id" value="{{ $periode->id }}">
         <input type="hidden" name="level_penilai" value="{{ $levelPenilai }}">
 
-        <!-- 1. PENILAIAN KPI -->
+        <!-- ==================== 1. PENILAIAN KPI ==================== -->
         <div class="bg-white rounded-lg shadow p-6">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold">
@@ -49,34 +49,37 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">No</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Indikator KPI</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Target</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Bobot %</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Nilai (0-100)</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">No</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Indikator KPI</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Target</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Bobot %</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500" style="width: 90px;">Nilai (0-100)</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500" style="width: 250px;">Komentar</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($indikator['kpi'] as $index => $indikator)
                         <tr>
-                            <td class="px-4 py-2 text-sm text-gray-500">{{ $index + 1 }}</td>
-                            <td class="px-4 py-2 text-sm text-gray-700">{{ $indikator->indikator }}</td>
-                            <td class="px-4 py-2 text-sm text-gray-500">{{ $indikator->target }} {{ $indikator->satuan }}</td>
-                            <td class="px-4 py-2 text-sm text-gray-500">{{ $indikator->bobot }}%</td>
-                            <td class="px-4 py-2">
+                            <td class="px-3 py-2 text-sm text-gray-500">{{ $index + 1 }}</td>
+                            <td class="px-3 py-2 text-sm text-gray-700">{{ $indikator->indikator }}</td>
+                            <td class="px-3 py-2 text-sm text-gray-500">{{ $indikator->target }} {{ $indikator->satuan }}</td>
+                            <td class="px-3 py-2 text-sm text-gray-500">{{ $indikator->bobot }}%</td>
+                            <td class="px-3 py-2">
                                 <input type="number" name="nilai_kpi[]" required
                                        min="0" max="100" step="0.5"
-                                       class="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 nilai-input"
+                                       class="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 nilai-input"
                                        data-jenis="kpi">
+                            </td>
+                            <td class="px-3 py-2">
+                                <textarea name="komentar_kpi[]" rows="1"
+                                          class="w-full px-2 py-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                          placeholder="Komentar..."></textarea>
                             </td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="5" class="px-4 py-2 text-center text-gray-500">
+                            <td colspan="6" class="px-4 py-2 text-center text-gray-500">
                                 Belum ada indikator KPI untuk jabatan ini.
-                                <a href="{{ route('admin.indikator.edit', $pegawai->jabatan_id) }}" class="text-blue-600 hover:underline">
-                                    Tambah indikator
-                                </a>
                             </td>
                         </tr>
                         @endforelse
@@ -87,13 +90,14 @@
                             <td class="px-4 py-2">
                                 <span id="avg-kpi" class="text-lg font-bold text-blue-600">0</span>
                             </td>
+                            <td></td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
         </div>
 
-        <!-- 2. PENILAIAN KOMPETENSI -->
+        <!-- ==================== 2. PENILAIAN KOMPETENSI ==================== -->
         <div class="bg-white rounded-lg shadow p-6 mt-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold">
@@ -106,34 +110,37 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">No</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Indikator Kompetensi</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Skala</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Bobot %</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Nilai</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">No</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Indikator Kompetensi</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Skala</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Bobot %</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500" style="width: 90px;">Nilai</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500" style="width: 250px;">Komentar</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($indikator['kompetensi'] as $index => $indikator)
                         <tr>
-                            <td class="px-4 py-2 text-sm text-gray-500">{{ $index + 1 }}</td>
-                            <td class="px-4 py-2 text-sm text-gray-700">{{ $indikator->indikator }}</td>
-                            <td class="px-4 py-2 text-sm text-gray-500">1 - {{ $indikator->skala_maksimal }}</td>
-                            <td class="px-4 py-2 text-sm text-gray-500">{{ $indikator->bobot }}%</td>
-                            <td class="px-4 py-2">
+                            <td class="px-3 py-2 text-sm text-gray-500">{{ $index + 1 }}</td>
+                            <td class="px-3 py-2 text-sm text-gray-700">{{ $indikator->indikator }}</td>
+                            <td class="px-3 py-2 text-sm text-gray-500">1 - {{ $indikator->skala_maksimal }}</td>
+                            <td class="px-3 py-2 text-sm text-gray-500">{{ $indikator->bobot }}%</td>
+                            <td class="px-3 py-2">
                                 <input type="number" name="nilai_kompetensi[]" required
                                        min="1" max="{{ $indikator->skala_maksimal }}" step="0.5"
-                                       class="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 nilai-input"
+                                       class="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 nilai-input"
                                        data-jenis="kompetensi">
+                            </td>
+                            <td class="px-3 py-2">
+                                <textarea name="komentar_kompetensi[]" rows="1"
+                                          class="w-full px-2 py-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                          placeholder="Komentar..."></textarea>
                             </td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="5" class="px-4 py-2 text-center text-gray-500">
+                            <td colspan="6" class="px-4 py-2 text-center text-gray-500">
                                 Belum ada indikator kompetensi untuk jabatan ini.
-                                <a href="{{ route('admin.indikator.edit', $pegawai->jabatan_id) }}" class="text-blue-600 hover:underline">
-                                    Tambah indikator
-                                </a>
                             </td>
                         </tr>
                         @endforelse
@@ -144,13 +151,14 @@
                             <td class="px-4 py-2">
                                 <span id="avg-kompetensi" class="text-lg font-bold text-green-600">0</span>
                             </td>
+                            <td></td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
         </div>
 
-        <!-- 3. PENILAIAN CORE VALUES -->
+        <!-- ==================== 3. PENILAIAN CORE VALUES ==================== -->
         <div class="bg-white rounded-lg shadow p-6 mt-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold">
@@ -163,34 +171,37 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">No</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Indikator Core Values</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Skala</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Bobot %</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Nilai</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">No</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Indikator Core Values</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Skala</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Bobot %</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500" style="width: 90px;">Nilai</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500" style="width: 250px;">Komentar</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($indikator['core_values'] as $index => $indikator)
                         <tr>
-                            <td class="px-4 py-2 text-sm text-gray-500">{{ $index + 1 }}</td>
-                            <td class="px-4 py-2 text-sm text-gray-700">{{ $indikator->indikator }}</td>
-                            <td class="px-4 py-2 text-sm text-gray-500">1 - {{ $indikator->skala_maksimal }}</td>
-                            <td class="px-4 py-2 text-sm text-gray-500">{{ $indikator->bobot }}%</td>
-                            <td class="px-4 py-2">
+                            <td class="px-3 py-2 text-sm text-gray-500">{{ $index + 1 }}</td>
+                            <td class="px-3 py-2 text-sm text-gray-700">{{ $indikator->indikator }}</td>
+                            <td class="px-3 py-2 text-sm text-gray-500">1 - {{ $indikator->skala_maksimal }}</td>
+                            <td class="px-3 py-2 text-sm text-gray-500">{{ $indikator->bobot }}%</td>
+                            <td class="px-3 py-2">
                                 <input type="number" name="nilai_core_values[]" required
                                        min="1" max="{{ $indikator->skala_maksimal }}" step="0.5"
-                                       class="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 nilai-input"
+                                       class="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 nilai-input"
                                        data-jenis="core_values">
+                            </td>
+                            <td class="px-3 py-2">
+                                <textarea name="komentar_core_values[]" rows="1"
+                                          class="w-full px-2 py-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                          placeholder="Komentar..."></textarea>
                             </td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="5" class="px-4 py-2 text-center text-gray-500">
+                            <td colspan="6" class="px-4 py-2 text-center text-gray-500">
                                 Belum ada indikator core values untuk jabatan ini.
-                                <a href="{{ route('admin.indikator.edit', $pegawai->jabatan_id) }}" class="text-blue-600 hover:underline">
-                                    Tambah indikator
-                                </a>
                             </td>
                         </tr>
                         @endforelse
@@ -201,13 +212,14 @@
                             <td class="px-4 py-2">
                                 <span id="avg-core-values" class="text-lg font-bold text-yellow-600">0</span>
                             </td>
+                            <td></td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
         </div>
 
-        <!-- HASIL PERHITUNGAN -->
+        <!-- ==================== HASIL PERHITUNGAN ==================== -->
         <div class="bg-white rounded-lg shadow p-6 mt-4 border-2 border-blue-200">
             <h3 class="text-lg font-semibold mb-4">Hasil Perhitungan</h3>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -247,32 +259,26 @@
 
 @push('scripts')
 <script>
-    // Auto-calculate when nilai changes
     document.querySelectorAll('.nilai-input').forEach(input => {
         input.addEventListener('input', calculateAll);
         input.addEventListener('change', calculateAll);
     });
 
-    // Predikat data from PHP
     const predikatData = @json(\App\Models\PredikatKinerja::all());
 
     function calculateAll() {
-        // 1. Calculate average KPI
         const kpiInputs = document.querySelectorAll('input[name="nilai_kpi[]"]');
         const avgKPI = calculateAverage(kpiInputs);
         document.getElementById('avg-kpi').textContent = avgKPI.toFixed(2);
 
-        // 2. Calculate average Kompetensi
         const kompetensiInputs = document.querySelectorAll('input[name="nilai_kompetensi[]"]');
         const avgKompetensi = calculateAverage(kompetensiInputs);
         document.getElementById('avg-kompetensi').textContent = avgKompetensi.toFixed(2);
 
-        // 3. Calculate average Core Values
         const coreInputs = document.querySelectorAll('input[name="nilai_core_values[]"]');
         const avgCore = calculateAverage(coreInputs);
         document.getElementById('avg-core-values').textContent = avgCore.toFixed(2);
 
-        // 4. Calculate weighted scores
         const bobotKPI = {{ $bobot->bobot_kpi ?? 70 }};
         const bobotKompetensi = {{ $bobot->bobot_kompetensi ?? 15 }};
         const bobotCore = {{ $bobot->bobot_core_values ?? 15 }};
@@ -282,13 +288,11 @@
         const nilaiCore = avgCore * bobotCore / 100;
         const nilaiTotal = nilaiKPI + nilaiKompetensi + nilaiCore;
 
-        // 5. Display results
         document.getElementById('hasil-kpi').textContent = nilaiKPI.toFixed(2);
         document.getElementById('hasil-kompetensi').textContent = nilaiKompetensi.toFixed(2);
         document.getElementById('hasil-core').textContent = nilaiCore.toFixed(2);
         document.getElementById('hasil-total').textContent = nilaiTotal.toFixed(2);
 
-        // 6. Determine predikat
         let predikat = null;
         for (const p of predikatData) {
             if (nilaiTotal >= p.batas_bawah && nilaiTotal <= p.batas_atas) {
@@ -310,19 +314,14 @@
     }
 
     function calculateAverage(inputs) {
-        let total = 0;
-        let count = 0;
+        let total = 0, count = 0;
         inputs.forEach(input => {
             const val = parseFloat(input.value);
-            if (!isNaN(val) && val >= 0) {
-                total += val;
-                count++;
-            }
+            if (!isNaN(val) && val >= 0) { total += val; count++; }
         });
         return count > 0 ? total / count : 0;
     }
 
-    // Initial calculation
     calculateAll();
 </script>
 @endpush

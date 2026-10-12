@@ -230,32 +230,45 @@ class LaporanController extends Controller
     }
 
     /**
-     * Display laporan cuti
+     * Display laporan cuti — semua data, sinkron dengan admin.cuti
      */
     public function cuti(Request $request)
     {
-        $tahun = $request->tahun ?? date('Y');
-        $status = $request->status;
-        
-        $query = Cuti::with(['pegawai', 'pegawai.jabatan']);
-        
-        if ($tahun) {
-            $query->whereYear('created_at', $tahun);
-        }
-        
-        if ($status) {
-            $query->where('status', $status);
-        }
-        
-        $data = $query->orderBy('created_at', 'desc')->get();
+        $query = Cuti::with(['pegawai', 'approvals.approver', 'finalApprovedBy']);
 
+        // Filter status — kalau tidak ada, tampilkan semua
+        if ($request->status) {
+            $query->where('status', $request->status);
+        }
+
+        // Filter jenis cuti
+        if ($request->jenis_cuti) {
+            $query->where('jenis_cuti', $request->jenis_cuti);
+        }
+
+        // Filter tahun — opsional
+        if ($request->tahun) {
+            $query->whereYear('created_at', $request->tahun);
+        }
+
+        // Filter search pegawai
+        if ($request->search) {
+            $query->whereHas('pegawai', function ($q) use ($request) {
+                $q->where('nama', 'like', '%' . $request->search . '%')
+                  ->orWhere('nip', 'like', '%' . $request->search . '%');
+            });
+        }
+
+        $data = $query->orderBy('created_at', 'desc')->paginate(20);
+
+        // Summary dari seluruh data
         $summary = [
-            'total' => $data->count(),
-            'disetujui' => $data->where('status', 'disetujui')->count(),
-            'ditolak' => $data->where('status', 'ditolak')->count(),
-            'pending' => $data->where('status', 'pending')->count(),
-            'dibatalkan' => $data->where('status', 'dibatalkan')->count(),
-            'total_hari' => $data->where('status', 'disetujui')->sum('lama_hari'),
+            'total' => Cuti::count(),
+            'disetujui' => Cuti::where('status', 'disetujui')->count(),
+            'ditolak' => Cuti::where('status', 'ditolak')->count(),
+            'pending' => Cuti::where('status', 'pending')->count(),
+            'dibatalkan' => Cuti::where('status', 'dibatalkan')->count(),
+            'total_hari' => Cuti::where('status', 'disetujui')->sum('lama_hari'),
         ];
 
         // List tahun untuk filter
@@ -269,7 +282,14 @@ class LaporanController extends Controller
             $tahunList = [date('Y')];
         }
 
-        return view('admin.laporan.cuti', compact('data', 'summary', 'tahun', 'tahunList', 'status'));
+        $tahun = $request->tahun;
+        $status = $request->status;
+        $jenis_cuti = $request->jenis_cuti;
+        $search = $request->search;
+
+        return view('admin.laporan.cuti', compact(
+            'data', 'summary', 'tahun', 'tahunList', 'status', 'jenis_cuti', 'search'
+        ));
     }
 
     /**
@@ -278,14 +298,24 @@ class LaporanController extends Controller
     public function downloadCuti(Request $request)
     {
         $tahun = $request->tahun ?? date('Y');
+        $status = $request->status;
+        $jenis_cuti = $request->jenis_cuti;
         $format = $request->format ?? 'pdf';
 
-        $query = Cuti::with(['pegawai', 'pegawai.jabatan']);
-        
+        $query = Cuti::with(['pegawai', 'pegawai.jabatan', 'finalApprovedBy']);
+
         if ($tahun) {
             $query->whereYear('created_at', $tahun);
         }
-        
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        if ($jenis_cuti) {
+            $query->where('jenis_cuti', $jenis_cuti);
+        }
+
         $data = $query->orderBy('created_at', 'desc')->get();
 
         $summary = [
@@ -293,6 +323,7 @@ class LaporanController extends Controller
             'disetujui' => $data->where('status', 'disetujui')->count(),
             'ditolak' => $data->where('status', 'ditolak')->count(),
             'pending' => $data->where('status', 'pending')->count(),
+            'dibatalkan' => $data->where('status', 'dibatalkan')->count(),
             'total_hari' => $data->where('status', 'disetujui')->sum('lama_hari'),
         ];
 
@@ -308,7 +339,16 @@ class LaporanController extends Controller
         // PDF
         $pdf = Pdf::loadView('admin.laporan.pdf-cuti', compact('data', 'summary', 'tahun', 'bpr'));
         $pdf->setPaper('a4', 'landscape');
-        
-        return $pdf->download("laporan_cuti_" . $tahun . ".pdf");
+
+        // Margin
+        $pdf->setOption('margin-top', 40);
+        $pdf->setOption('margin-right', 40);
+        $pdf->setOption('margin-bottom', 40);
+        $pdf->setOption('margin-left', 40);
+
+        $pdf->setOption('isHtml5ParserEnabled', true);
+        $pdf->setOption('isRemoteEnabled', true);
+
+        return $pdf->stream("laporan_cuti_" . $tahun . ".pdf", ['Attachment' => false]);
     }
 }

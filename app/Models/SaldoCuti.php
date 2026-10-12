@@ -16,7 +16,8 @@ class SaldoCuti extends Model
         'tahun',
         'total_hari',
         'digunakan',
-        'sisa_hari'
+        'sisa_hari',
+        'keterangan'
     ];
 
     public function pegawai()

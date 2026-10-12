@@ -12,6 +12,7 @@
         "laravel/tinker": "^2.10.1",
         "laravel/ui": "^4.6",
         "maatwebsite/excel": "^3.1",
+        "spatie/laravel-activitylog": "^4.12",
         "spatie/laravel-permission": "^6.25"
     },
     "require-dev": {
@@ -33,7 +34,8 @@
         },
         "files": [
             "app/Helpers/Helper.php",
-            "app/Helpers/CutiHelper.php"
+            "app/Helpers/CutiHelper.php",
+            "app/Helpers/NotifHelper.php"
         ]
     },
     "autoload-dev": {

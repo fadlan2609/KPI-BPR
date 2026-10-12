@@ -3,7 +3,124 @@
 @section('title', 'Dashboard Pegawai')
 
 @section('content')
+
+{{-- ============================================================
+     ALERT NOTIFIKASI — CLEAN STYLE
+     ============================================================ --}}
+@php
+    $userDash = Auth::user();
+    $notifiableDash = $userDash->pegawai ?? $userDash;
+    $unreadDash = $notifiableDash->unreadNotifications()->count();
+    $latestNotifs = $notifiableDash->notifications()
+        ->whereNull('read_at')
+        ->orderBy('created_at', 'desc')
+        ->limit(3)
+        ->get();
+@endphp
+
+@if($unreadDash > 0)
+    <div class="mb-6 bg-white rounded-2xl shadow-md overflow-hidden border border-gray-100 relative">
+
+        {{-- Top Accent Bar --}}
+        <div style="height: 4px; background: linear-gradient(90deg, #ef4444 0%, #f97316 50%, #f59e0b 100%);"></div>
+
+        <div class="p-6">
+            <div class="flex items-start gap-4">
+
+                {{-- Icon Bell --}}
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 rounded-xl flex items-center justify-center shadow-md relative"
+                         style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+                        <i class="fas fa-bell text-white text-xl"></i>
+
+                        {{-- Ping animation --}}
+                        <span class="absolute -top-1 -right-1 flex h-4 w-4">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-4 w-4 bg-red-500 border-2 border-white"></span>
+                        </span>
+                    </div>
+                </div>
+
+                {{-- Content --}}
+                <div class="flex-1 min-w-0">
+
+                    {{-- Title --}}
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <h3 class="text-lg font-bold text-gray-900">
+                            Notifikasi Baru
+                        </h3>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                            {{ $unreadDash }} belum dibaca
+                        </span>
+                    </div>
+
+                    <p class="text-sm text-gray-600 mb-4">
+                        Anda memiliki <strong class="text-red-600">{{ $unreadDash }} notifikasi</strong> yang belum dibaca. Segera periksa agar tidak ada informasi penting yang terlewat.
+                    </p>
+
+                    {{-- Preview Notif --}}
+                    @if($latestNotifs->count() > 0)
+                        <div class="bg-gray-50 rounded-xl p-3 mb-4 space-y-1">
+                            @foreach($latestNotifs as $notif)
+                                @php
+                                    $data = $notif->data;
+                                    $type = $data['type'] ?? 'info';
+                                    $iconBg = match($type) {
+                                        'cuti_disetujui' => 'bg-green-100 text-green-600',
+                                        'cuti_ditolak' => 'bg-red-100 text-red-600',
+                                        'cuti_baru' => 'bg-blue-100 text-blue-600',
+                                        default => 'bg-gray-100 text-gray-600',
+                                    };
+                                @endphp
+                                <a href="{{ $data['url'] ?? route('pegawai.notifications.index') }}"
+                                   class="flex items-center gap-3 p-2 rounded-lg hover:bg-white transition">
+                                    <div class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center {{ $iconBg }}">
+                                        <i class="fas fa-{{ $data['icon'] ?? 'bell' }} text-xs"></i>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-semibold text-gray-800 truncate">
+                                            {{ $data['title'] ?? 'Notifikasi' }}
+                                        </p>
+                                        <p class="text-xs text-gray-500 truncate">
+                                            {{ $data['message'] ?? '' }}
+                                        </p>
+                                    </div>
+                                    <span class="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
+                                        {{ $notif->created_at->diffForHumans() }}
+                                    </span>
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    {{-- Actions --}}
+                    <div class="flex flex-wrap items-center gap-2">
+                        <a href="{{ route('pegawai.notifications.index') }}"
+                           class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-sm transition">
+                            <i class="fas fa-list mr-2"></i>
+                            Lihat Semua Notifikasi
+                        </a>
+
+                        <form action="{{ route('pegawai.notifications.read-all') }}" method="POST" class="inline">
+                            @csrf
+                            <button type="submit"
+                                    class="inline-flex items-center px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg text-sm font-semibold transition">
+                                <i class="fas fa-check-double mr-2"></i>
+                                Tandai Semua Dibaca
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+@endif
+
+{{-- ============================================================
+     KONTEN DASHBOARD
+     ============================================================ --}}
 <div class="space-y-6">
+
     <!-- Welcome -->
     <div class="bg-white rounded-lg shadow p-6">
         <div class="flex items-center justify-between">

@@ -94,7 +94,7 @@ class PegawaiDashboardController extends Controller
     }
 
     /**
-     * Preview laporan lengkap - 3 level penilai dengan KPI, Kompetensi, Core Values
+     * Preview laporan HTML — gabungan 3 level
      */
     public function cetakLaporan($hasilId)
     {
@@ -117,15 +117,14 @@ class PegawaiDashboardController extends Controller
                 ->with('error', 'Laporan tidak ditemukan!');
         }
 
+        // ✅ Ambil periode dari relasi hasil
+        $periode = $hasil->periode;
+
         $penilaian = PenilaianKPI::with(['penilai'])
             ->where('pegawai_id', $pegawai->id)
             ->where('periode_id', $hasil->periode_id)
             ->get()
             ->keyBy('level_penilai');
-
-        $detailSelf = $penilaian->has('self') ? json_decode($penilaian['self']->detail_indikator, true) : null;
-        $detailAtasan = $penilaian->has('atasan_langsung') ? json_decode($penilaian['atasan_langsung']->detail_indikator, true) : null;
-        $detailPenilai = $penilaian->has('atasan_penilai') ? json_decode($penilaian['atasan_penilai']->detail_indikator, true) : null;
 
         $indikatorKPI = IndikatorKPI::where('jabatan_id', $pegawai->jabatan_id)->get();
         $indikatorKompetensi = IndikatorKompetensi::where('jabatan_id', $pegawai->jabatan_id)->get();
@@ -148,13 +147,11 @@ class PegawaiDashboardController extends Controller
 
         $bpr = BPR::first();
 
-        return view('pegawai.laporan-preview', compact(
+        return view('pegawai.cetak-laporan', compact(
             'pegawai',
+            'periode',              // ✅ DITAMBAHKAN
             'hasil',
             'penilaian',
-            'detailSelf',
-            'detailAtasan',
-            'detailPenilai',
             'indikatorKPI',
             'indikatorKompetensi',
             'indikatorCore',
@@ -164,7 +161,7 @@ class PegawaiDashboardController extends Controller
     }
 
     /**
-     * Tampilkan PDF laporan lengkap di browser (PREVIEW) - BUKAN DOWNLOAD LANGSUNG
+     * Stream PDF — gabungan 3 level
      */
     public function cetakLaporanPDF($hasilId)
     {
@@ -187,15 +184,14 @@ class PegawaiDashboardController extends Controller
                 ->with('error', 'Laporan tidak ditemukan!');
         }
 
+        // ✅ Ambil periode
+        $periode = $hasil->periode;
+
         $penilaian = PenilaianKPI::with(['penilai'])
             ->where('pegawai_id', $pegawai->id)
             ->where('periode_id', $hasil->periode_id)
             ->get()
             ->keyBy('level_penilai');
-
-        $detailSelf = $penilaian->has('self') ? json_decode($penilaian['self']->detail_indikator, true) : null;
-        $detailAtasan = $penilaian->has('atasan_langsung') ? json_decode($penilaian['atasan_langsung']->detail_indikator, true) : null;
-        $detailPenilai = $penilaian->has('atasan_penilai') ? json_decode($penilaian['atasan_penilai']->detail_indikator, true) : null;
 
         $indikatorKPI = IndikatorKPI::where('jabatan_id', $pegawai->jabatan_id)->get();
         $indikatorKompetensi = IndikatorKompetensi::where('jabatan_id', $pegawai->jabatan_id)->get();
@@ -218,23 +214,42 @@ class PegawaiDashboardController extends Controller
 
         $bpr = BPR::first();
 
+        // Atasan langsung & atasan penilai
+        $atasanLangsung = isset($penilaian['atasan_langsung']) ? $penilaian['atasan_langsung']->penilai : null;
+        $atasanPenilai  = isset($penilaian['atasan_penilai'])  ? $penilaian['atasan_penilai']->penilai  : null;
+        $hasAtasanPenilai = isset($penilaian['atasan_penilai']);
+
+        // TTD & Logo
+        $ttdPegawaiData         = $this->getBase64File($pegawai->ttd_image ?? null);
+        $ttdAtasanLangsungData  = $atasanLangsung ? $this->getBase64File($atasanLangsung->ttd_image ?? null) : null;
+        $ttdAtasanPenilaiData   = $atasanPenilai  ? $this->getBase64File($atasanPenilai->ttd_image ?? null)  : null;
+        $logoData               = $bpr ? $this->getBase64File($bpr->logo ?? null) : null;
+
         $pdf = Pdf::loadView('pegawai.laporan-pdf', compact(
             'pegawai',
+            'periode',              // ✅ DITAMBAHKAN
             'hasil',
             'penilaian',
-            'detailSelf',
-            'detailAtasan',
-            'detailPenilai',
             'indikatorKPI',
             'indikatorKompetensi',
             'indikatorCore',
             'bobot',
-            'bpr'
+            'bpr',
+            'atasanLangsung',
+            'atasanPenilai',
+            'hasAtasanPenilai',
+            'ttdPegawaiData',
+            'ttdAtasanLangsungData',
+            'ttdAtasanPenilaiData',
+            'logoData'
         ));
         $pdf->setPaper('a4', 'portrait');
 
-        // STREAM = TAMPIL DI BROWSER (PREVIEW), BUKAN DOWNLOAD LANGSUNG
-        return $pdf->stream('Laporan_Penilaian_' . $pegawai->nama . '_' . str_replace(' ', '_', $hasil->periode->nama) . '.pdf');
+        $namaPegawai = preg_replace('/[^A-Za-z0-9_\-]/', '_', $pegawai->nama ?? 'Pegawai');
+        $namaPeriode = preg_replace('/[^A-Za-z0-9_\-]/', '_', $hasil->periode->nama ?? 'Periode');
+        $namaFile = 'Laporan_Penilaian_' . $namaPegawai . '_' . $namaPeriode . '.pdf';
+
+        return $pdf->stream($namaFile, ['Attachment' => false]);
     }
 
     public function cuti()
@@ -326,5 +341,21 @@ class PegawaiDashboardController extends Controller
             ->get();
 
         return view('pegawai.saldo-cuti', compact('saldo', 'pegawai'));
+    }
+
+    /**
+     * Helper: Convert file ke base64
+     */
+    private function getBase64File($path)
+    {
+        if (!$path) return null;
+
+        $fullPath = storage_path('app/public/' . $path);
+        if (!file_exists($fullPath)) return null;
+
+        $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+        if ($ext === 'jpg') $ext = 'jpeg';
+
+        return 'data:image/' . $ext . ';base64,' . base64_encode(file_get_contents($fullPath));
     }
 }

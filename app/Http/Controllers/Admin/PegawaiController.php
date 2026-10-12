@@ -8,10 +8,18 @@ use App\Models\Jabatan;
 use App\Models\Kantor;
 use App\Models\User;
 use App\Models\SaldoCuti;
+use App\Models\PegawaiKeluarga;
+use App\Models\PegawaiAnak;
+use App\Models\PegawaiPendidikan;
+use App\Models\AnakPendidikan;
+use App\Models\KeluargaPendidikan;
+use App\Models\BPR;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\PegawaiImport;
 use App\Exports\PegawaiExport;
@@ -23,17 +31,15 @@ class PegawaiController extends Controller
      */
     public function index(Request $request)
     {
-        // Ambil parameter filter
         $search = $request->search;
         $jabatan = $request->jabatan;
         $status = $request->status;
 
-        // Query dengan filter
         $pegawai = Pegawai::with([
-            'jabatan', 
-            'kantor', 
-            'atasanLangsung', 
-            'user', 
+            'jabatan',
+            'kantor',
+            'atasanLangsung',
+            'user',
             'bawahanLangsung',
             'atasanLangsung.jabatan.atasan'
         ])
@@ -54,7 +60,6 @@ class PegawaiController extends Controller
         ->orderBy('created_at', 'desc')
         ->paginate(15);
 
-        // Proses setiap pegawai untuk mendapatkan atasan penilai
         foreach ($pegawai as $p) {
             $p->atasan_penilai = null;
             if ($p->atasanLangsung && $p->atasanLangsung->jabatan) {
@@ -65,8 +70,7 @@ class PegawaiController extends Controller
                         ->first();
                 }
             }
-            
-            // Hitung total bawahan tidak langsung
+
             $totalBawahan = 0;
             foreach ($p->bawahanLangsung as $bawahan) {
                 $totalBawahan += $bawahan->bawahanLangsung->count();
@@ -74,7 +78,6 @@ class PegawaiController extends Controller
             $p->total_bawahan_tidak_langsung = $totalBawahan;
         }
 
-        // Data untuk dropdown filter
         $jabatanOptions = Jabatan::all();
         $kantorOptions = Kantor::all();
         $pegawaiOptions = Pegawai::where('status', 'aktif')->get();
@@ -99,7 +102,13 @@ class PegawaiController extends Controller
         $kantorOptions = Kantor::all();
         $pegawaiOptions = Pegawai::where('status', 'aktif')->get();
 
-        return view('admin.pegawai.create', compact('jabatanOptions', 'kantorOptions', 'pegawaiOptions'));
+        $jabatan = $jabatanOptions;
+        $kantor = $kantorOptions;
+
+        return view('admin.pegawai.create', compact(
+            'jabatanOptions', 'kantorOptions', 'pegawaiOptions',
+            'jabatan', 'kantor'
+        ));
     }
 
     /**
@@ -126,18 +135,34 @@ class PegawaiController extends Controller
             'alamat' => 'nullable|string',
             'no_hp' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:100',
+            'ttd_type' => 'nullable|in:gambar,barcode',
+            'ttd_image' => 'nullable|image|mimes:jpeg,png,jpg,svg,webp|max:2048',
+            'foto_profil' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         DB::beginTransaction();
 
         try {
-            $pegawai = Pegawai::create($request->all());
+            $data = $request->except(['ttd_image', 'foto_profil', '_token']);
 
-            // Auto create saldo cuti untuk tahun berjalan
-            $tahun = date('Y');
+            if ($request->hasFile('ttd_image')) {
+                $data['ttd_image'] = $request->file('ttd_image')->store('pegawai/ttd', 'public');
+                $data['ttd_type'] = $request->ttd_type ?? 'gambar';
+            }
+
+            if ($request->hasFile('foto_profil')) {
+                $data['foto_profil'] = $request->file('foto_profil')->store('pegawai/foto', 'public');
+                $data['foto_crop_x'] = $request->foto_crop_x ?? 0.5;
+                $data['foto_crop_y'] = $request->foto_crop_y ?? 0.5;
+                $data['foto_crop_zoom'] = $request->foto_crop_zoom ?? 1;
+                $data['foto_crop_rotate'] = $request->foto_crop_rotate ?? 0;
+            }
+
+            $pegawai = Pegawai::create($data);
+
             SaldoCuti::create([
                 'pegawai_id' => $pegawai->id,
-                'tahun' => $tahun,
+                'tahun' => date('Y'),
                 'total_hari' => 12,
                 'digunakan' => 0,
                 'sisa_hari' => 12,
@@ -167,10 +192,12 @@ class PegawaiController extends Controller
             'user',
             'gajiPokokAktif',
             'bawahanLangsung',
-            'saldoCuti'
+            'saldoCuti',
+            'keluarga.pendidikan',
+            'anak.pendidikan',
+            'pendidikan'
         ])->findOrFail($id);
 
-        // Ambil Atasan Penilai (Atasan dari Atasan Langsung)
         $atasanPenilai = null;
         if ($pegawai->atasanLangsung && $pegawai->atasanLangsung->jabatan) {
             $jabatanAtasan = $pegawai->atasanLangsung->jabatan->atasan;
@@ -189,12 +216,33 @@ class PegawaiController extends Controller
      */
     public function edit($id)
     {
-        $pegawai = Pegawai::findOrFail($id);
+        $pegawai = Pegawai::with([
+            'jabatan',
+            'kantor',
+            'atasanLangsung',
+            'user',
+            'keluarga.pendidikan',
+            'anak.pendidikan',
+            'pendidikan'
+        ])->findOrFail($id);
+
         $jabatanOptions = Jabatan::all();
         $kantorOptions = Kantor::all();
-        $pegawaiOptions = Pegawai::where('status', 'aktif')->where('id', '!=', $id)->get();
+        $pegawaiOptions = Pegawai::where('status', 'aktif')
+            ->where('id', '!=', $id)
+            ->get();
 
-        return view('admin.pegawai.edit', compact('pegawai', 'jabatanOptions', 'kantorOptions', 'pegawaiOptions'));
+        $jabatan = $jabatanOptions;
+        $kantor = $kantorOptions;
+
+        return view('admin.pegawai.edit', compact(
+            'pegawai',
+            'jabatanOptions',
+            'kantorOptions',
+            'pegawaiOptions',
+            'jabatan',
+            'kantor'
+        ));
     }
 
     /**
@@ -223,12 +271,158 @@ class PegawaiController extends Controller
             'alamat' => 'nullable|string',
             'no_hp' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:100',
+            'ttd_type' => 'nullable|in:gambar,barcode',
+            'ttd_image' => 'nullable|image|mimes:jpeg,png,jpg,svg,webp|max:2048',
+            'foto_profil' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
-        $pegawai->update($request->all());
+        DB::beginTransaction();
+        try {
+            $data = $request->except(['ttd_image', 'foto_profil', '_token', '_method']);
 
-        return redirect()->route('admin.pegawai.index')
-            ->with('success', 'Pegawai berhasil diperbarui!');
+            // Handle upload TTD baru
+            if ($request->hasFile('ttd_image')) {
+                if ($pegawai->ttd_image && Storage::disk('public')->exists($pegawai->ttd_image)) {
+                    Storage::disk('public')->delete($pegawai->ttd_image);
+                }
+                $data['ttd_image'] = $request->file('ttd_image')->store('pegawai/ttd', 'public');
+                $data['ttd_type'] = $request->ttd_type ?? 'gambar';
+            }
+
+            // Handle hapus TTD
+            if ($request->has('hapus_ttd') && $request->hapus_ttd == 1) {
+                if ($pegawai->ttd_image && Storage::disk('public')->exists($pegawai->ttd_image)) {
+                    Storage::disk('public')->delete($pegawai->ttd_image);
+                }
+                $data['ttd_image'] = null;
+                $data['ttd_type'] = null;
+            }
+
+            // ==================== FOTO PROFIL ====================
+            if ($request->hasFile('foto_profil')) {
+                if ($pegawai->foto_profil && Storage::disk('public')->exists($pegawai->foto_profil)) {
+                    Storage::disk('public')->delete($pegawai->foto_profil);
+                }
+                $data['foto_profil'] = $request->file('foto_profil')->store('pegawai/foto', 'public');
+                $data['foto_crop_x'] = $request->foto_crop_x ?? 0.5;
+                $data['foto_crop_y'] = $request->foto_crop_y ?? 0.5;
+                $data['foto_crop_zoom'] = $request->foto_crop_zoom ?? 1;
+                $data['foto_crop_rotate'] = $request->foto_crop_rotate ?? 0;
+            }
+
+            if ($request->has('hapus_foto') && $request->hapus_foto == 1) {
+                if ($pegawai->foto_profil && Storage::disk('public')->exists($pegawai->foto_profil)) {
+                    Storage::disk('public')->delete($pegawai->foto_profil);
+                }
+                $data['foto_profil'] = null;
+                $data['foto_crop_x'] = null;
+                $data['foto_crop_y'] = null;
+                $data['foto_crop_zoom'] = 1;
+                $data['foto_crop_rotate'] = 0;
+            }
+
+            $pegawai->update($data);
+
+            // ==================== KELUARGA ====================
+            if ($request->has('keluarga')) {
+                foreach ($pegawai->keluarga as $k) {
+                    $k->pendidikan()->delete();
+                }
+                $pegawai->keluarga()->delete();
+
+                foreach ($request->keluarga as $k) {
+                    if (empty($k['nama'])) continue;
+                    $keluarga = $pegawai->keluarga()->create([
+                        'hubungan' => $k['hubungan'] ?? 'istri',
+                        'nama' => $k['nama'],
+                        'nik' => $k['nik'] ?? null,
+                        'tempat_lahir' => $k['tempat_lahir'] ?? null,
+                        'tanggal_lahir' => $k['tanggal_lahir'] ?? null,
+                        'jenis_kelamin' => $k['jenis_kelamin'] ?? 'P',
+                        'pendidikan_terakhir' => $k['pendidikan_terakhir'] ?? null,
+                        'pekerjaan' => $k['pekerjaan'] ?? null,
+                        'alamat' => $k['alamat'] ?? null,
+                        'no_telp' => $k['no_telp'] ?? null,
+                    ]);
+
+                    if (!empty($k['pendidikan']) && is_array($k['pendidikan'])) {
+                        foreach ($k['pendidikan'] as $p) {
+                            if (empty($p['nama_sekolah'])) continue;
+                            $keluarga->pendidikan()->create([
+                                'jenjang' => $p['jenjang'] ?? 'S1',
+                                'nama_sekolah' => $p['nama_sekolah'],
+                                'jurusan' => $p['jurusan'] ?? null,
+                                'kota' => $p['kota'] ?? null,
+                                'tahun_masuk' => $p['tahun_masuk'] ?? null,
+                                'tahun_lulus' => $p['tahun_lulus'] ?? null,
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            // ==================== ANAK ====================
+            if ($request->has('anak')) {
+                foreach ($pegawai->anak as $a) {
+                    $a->pendidikan()->delete();
+                }
+                $pegawai->anak()->delete();
+
+                foreach ($request->anak as $a) {
+                    if (empty($a['nama'])) continue;
+                    $anak = $pegawai->anak()->create([
+                        'nama' => $a['nama'],
+                        'nik' => $a['nik'] ?? null,
+                        'tempat_lahir' => $a['tempat_lahir'] ?? null,
+                        'tanggal_lahir' => $a['tanggal_lahir'] ?? null,
+                        'jenis_kelamin' => $a['jenis_kelamin'] ?? 'L',
+                        'urutan_anak' => $a['urutan_anak'] ?? 1,
+                        'status_anak' => $a['status_anak'] ?? 'kandung',
+                        'pendidikan_terakhir' => $a['pendidikan_terakhir'] ?? null,
+                        'sekolah_sekarang' => $a['sekolah_sekarang'] ?? null,
+                        'pekerjaan' => $a['pekerjaan'] ?? null,
+                    ]);
+
+                    if (!empty($a['pendidikan']) && is_array($a['pendidikan'])) {
+                        foreach ($a['pendidikan'] as $p) {
+                            if (empty($p['nama_sekolah'])) continue;
+                            $anak->pendidikan()->create([
+                                'jenjang' => $p['jenjang'] ?? 'SD',
+                                'nama_sekolah' => $p['nama_sekolah'],
+                                'kota' => $p['kota'] ?? null,
+                                'tahun_masuk' => $p['tahun_masuk'] ?? null,
+                                'tahun_lulus' => $p['tahun_lulus'] ?? null,
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            // ==================== PENDIDIKAN PEGAWAI ====================
+            if ($request->has('pendidikan')) {
+                $pegawai->pendidikan()->delete();
+                foreach ($request->pendidikan as $p) {
+                    if (empty($p['nama_sekolah'])) continue;
+                    $pegawai->pendidikan()->create([
+                        'jenjang' => $p['jenjang'] ?? 'S1',
+                        'nama_sekolah' => $p['nama_sekolah'],
+                        'jurusan' => $p['jurusan'] ?? null,
+                        'kota' => $p['kota'] ?? null,
+                        'tahun_masuk' => $p['tahun_masuk'] ?? null,
+                        'tahun_lulus' => $p['tahun_lulus'] ?? null,
+                        'no_ijazah' => $p['no_ijazah'] ?? null,
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            return redirect()->route('admin.pegawai.index')
+                ->with('success', 'Pegawai berhasil diperbarui!');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Gagal update: ' . $e->getMessage())->withInput();
+        }
     }
 
     /**
@@ -241,17 +435,31 @@ class PegawaiController extends Controller
         DB::beginTransaction();
 
         try {
-            // Cek apakah ada user yang terkait
+            if ($pegawai->foto_profil && Storage::disk('public')->exists($pegawai->foto_profil)) {
+                Storage::disk('public')->delete($pegawai->foto_profil);
+            }
+
+            if ($pegawai->ttd_image && Storage::disk('public')->exists($pegawai->ttd_image)) {
+                Storage::disk('public')->delete($pegawai->ttd_image);
+            }
+
+            foreach ($pegawai->keluarga as $k) {
+                $k->pendidikan()->delete();
+            }
+            $pegawai->keluarga()->delete();
+
+            foreach ($pegawai->anak as $a) {
+                $a->pendidikan()->delete();
+            }
+            $pegawai->anak()->delete();
+            $pegawai->pendidikan()->delete();
+
             if ($pegawai->user) {
                 $pegawai->user->delete();
             }
 
-            // Hapus saldo cuti
             SaldoCuti::where('pegawai_id', $id)->delete();
-
-            // Hapus gaji pokok
             $pegawai->gajiPokok()->delete();
-
             $pegawai->delete();
 
             DB::commit();
@@ -281,6 +489,25 @@ class PegawaiController extends Controller
             foreach ($request->ids as $id) {
                 $pegawai = Pegawai::find($id);
                 if ($pegawai) {
+                    if ($pegawai->foto_profil && Storage::disk('public')->exists($pegawai->foto_profil)) {
+                        Storage::disk('public')->delete($pegawai->foto_profil);
+                    }
+
+                    if ($pegawai->ttd_image && Storage::disk('public')->exists($pegawai->ttd_image)) {
+                        Storage::disk('public')->delete($pegawai->ttd_image);
+                    }
+
+                    foreach ($pegawai->keluarga as $k) {
+                        $k->pendidikan()->delete();
+                    }
+                    $pegawai->keluarga()->delete();
+
+                    foreach ($pegawai->anak as $a) {
+                        $a->pendidikan()->delete();
+                    }
+                    $pegawai->anak()->delete();
+                    $pegawai->pendidikan()->delete();
+
                     if ($pegawai->user) {
                         $pegawai->user->delete();
                     }
@@ -302,6 +529,42 @@ class PegawaiController extends Controller
                 'success' => false,
                 'message' => 'Gagal menghapus: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Cetak CV Lengkap Pegawai (PDF) — dengan TTD & foto otomatis
+     */
+    public function cetakCV($id)
+    {
+        try {
+            $pegawai = Pegawai::with([
+                'jabatan',
+                'kantor',
+                'atasanLangsung.jabatan',
+                'keluarga.pendidikan',
+                'anak.pendidikan',
+                'pendidikan',
+            ])->findOrFail($id);
+
+            $bpr = BPR::first();
+
+            $pdf = Pdf::loadView('admin.pegawai.cv-pdf', compact('pegawai', 'bpr'));
+            $pdf->setPaper('a4', 'portrait');
+            $pdf->setOptions([
+                'isRemoteEnabled' => true,
+                'isHtml5ParserEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'chroot' => [storage_path('app/public')],
+            ]);
+
+            $namaFile = 'CV_' . preg_replace('/[^A-Za-z0-9_\-]/', '_', $pegawai->nama) . '.pdf';
+
+            return $pdf->stream($namaFile, ['Attachment' => false]);
+
+        } catch (\Exception $e) {
+            return redirect()->route('admin.pegawai.index')
+                ->with('error', 'Gagal cetak CV: ' . $e->getMessage());
         }
     }
 
@@ -342,13 +605,12 @@ class PegawaiController extends Controller
 
         $pegawai = Pegawai::findOrFail($id);
 
-        // Cek apakah sudah punya user
         if ($pegawai->user) {
             return redirect()->route('admin.pegawai.index')
                 ->with('error', 'Pegawai sudah memiliki akun user!');
         }
 
-        $user = User::create([
+        User::create([
             'pegawai_id' => $pegawai->id,
             'name' => $pegawai->nama,
             'username' => $request->username,
@@ -465,11 +727,9 @@ class PegawaiController extends Controller
 
         $atasanPenilai = null;
 
-        // Cari atasan dari atasan langsung (2 level di atas)
         if ($pegawai->jabatan && $pegawai->jabatan->atasan) {
             $jabatanAtasan = $pegawai->jabatan->atasan;
 
-            // Cari atasan dari atasan langsung (2 level di atas)
             if ($jabatanAtasan && $jabatanAtasan->atasan) {
                 $jabatanPenilai = $jabatanAtasan->atasan;
                 $atasanPenilai = Pegawai::where('jabatan_id', $jabatanPenilai->id)
@@ -532,7 +792,6 @@ class PegawaiController extends Controller
             'bawahan' => []
         ];
 
-        // Atasan Langsung
         if ($pegawai->atasanLangsung) {
             $hierarchy['atasan_langsung'] = [
                 'id' => $pegawai->atasanLangsung->id,
@@ -541,7 +800,6 @@ class PegawaiController extends Controller
                 'jabatan' => $pegawai->atasanLangsung->jabatan->nama ?? '-'
             ];
 
-            // Atasan Penilai (Atasan dari Atasan Langsung)
             if ($pegawai->atasanLangsung->jabatan && $pegawai->atasanLangsung->jabatan->atasan) {
                 $jabatanPenilai = $pegawai->atasanLangsung->jabatan->atasan;
                 $atasanPenilai = Pegawai::where('jabatan_id', $jabatanPenilai->id)
@@ -558,7 +816,6 @@ class PegawaiController extends Controller
             }
         }
 
-        // Bawahan Langsung
         foreach ($pegawai->bawahanLangsung as $bawahan) {
             $hierarchy['bawahan'][] = [
                 'id' => $bawahan->id,
@@ -582,7 +839,6 @@ class PegawaiController extends Controller
 
         $pegawai = Pegawai::findOrFail($id);
 
-        // Jika status diubah menjadi tidak aktif, nonaktifkan user juga
         if ($request->status != 'aktif' && $pegawai->user) {
             $pegawai->user->update(['is_active' => false]);
         } elseif ($request->status == 'aktif' && $pegawai->user) {
@@ -695,7 +951,7 @@ class PegawaiController extends Controller
     }
 
     /**
-     * Get hierarchy for dropdown (for AJAX - showing atasan penilai)
+     * Get hierarchy for dropdown (for AJAX)
      */
     public function getHierarchyDropdown($pegawaiId = null)
     {
@@ -717,7 +973,6 @@ class PegawaiController extends Controller
         ];
 
         if ($pegawai) {
-            // Atasan Langsung
             if ($pegawai->atasanLangsung) {
                 $data['atasan_langsung'] = [
                     'id' => $pegawai->atasanLangsung->id,
@@ -726,7 +981,6 @@ class PegawaiController extends Controller
                 ];
                 $data['semua_atasan'][] = $data['atasan_langsung'];
 
-                // Atasan Penilai
                 if ($pegawai->atasanLangsung->jabatan && $pegawai->atasanLangsung->jabatan->atasan) {
                     $jabatanPenilai = $pegawai->atasanLangsung->jabatan->atasan;
                     $atasanPenilai = Pegawai::where('jabatan_id', $jabatanPenilai->id)
